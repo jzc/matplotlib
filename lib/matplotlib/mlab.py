@@ -1,6 +1,5 @@
 """
-
-Numerical python functions written for compatability with MATLAB
+Numerical python functions written for compatibility with MATLAB
 commands with the same names.
 
 MATLAB compatible functions
@@ -15,25 +14,8 @@ MATLAB compatible functions
 :func:`detrend`
     Remove the mean or best fit line from an array
 
-:func:`find`
-    Return the indices where some condition is true;
-    numpy.nonzero is similar but more general.
-
-:func:`griddata`
-    Interpolate irregularly distributed data to a
-    regular grid.
-
-:func:`prctile`
-    Find the percentiles of a sequence
-
-:func:`prepca`
-    Principal Component Analysis
-
 :func:`psd`
     Power spectral density using Welch's average periodogram
-
-:func:`rk4`
-    A 4th order runge kutta integrator for 1D or ND systems
 
 :func:`specgram`
     Spectrogram (spectrum over segments of time)
@@ -42,26 +24,6 @@ Miscellaneous functions
 -----------------------
 
 Functions that don't exist in MATLAB, but are useful anyway:
-
-:func:`cohere_pairs`
-    Coherence over all pairs.  This is not a MATLAB function, but we
-    compute coherence a lot in my lab, and we compute it for a lot of
-    pairs.  This function is optimized to do this efficiently by
-    caching the direct FFTs.
-
-:func:`rk4`
-    A 4th order Runge-Kutta ODE integrator in case you ever find
-    yourself stranded without scipy (and the far superior
-    scipy.integrate tools)
-
-:func:`contiguous_regions`
-    Return the indices of the regions spanned by some logical mask
-
-:func:`cross_from_below`
-    Return the indices where a 1D array crosses a threshold from below
-
-:func:`cross_from_above`
-    Return the indices where a 1D array crosses a threshold from above
 
 :func:`complex_spectrum`
     Return the complex-valued frequency spectrum of a signal
@@ -78,10 +40,6 @@ Functions that don't exist in MATLAB, but are useful anyway:
 :func:`detrend_mean`
     Remove the mean from a line.
 
-:func:`demean`
-    Remove the mean from a line. This function is the same as
-    :func:`detrend_mean` except for the default *axis*.
-
 :func:`detrend_linear`
     Remove the best fit line from a line.
 
@@ -96,77 +54,7 @@ Functions that don't exist in MATLAB, but are useful anyway:
 
 :func:`apply_window`
     Apply a window along a given axis
-
-
-record array helper functions
------------------------------
-
-A collection of helper methods for numpyrecord arrays
-
-.. _htmlonly:
-
-    See :ref:`misc-examples-index`
-
-:func:`rec2txt`
-    Pretty print a record array
-
-:func:`rec2csv`
-    Store record array in CSV file
-
-:func:`csv2rec`
-    Import record array from CSV file with type inspection
-
-:func:`rec_append_fields`
-    Adds  field(s)/array(s) to record array
-
-:func:`rec_drop_fields`
-    Drop fields from record array
-
-:func:`rec_join`
-    Join two record arrays on sequence of fields
-
-:func:`recs_join`
-    A simple join of multiple recarrays using a single column as a key
-
-:func:`rec_groupby`
-    Summarize data by groups (similar to SQL GROUP BY)
-
-:func:`rec_summarize`
-    Helper code to filter rec array fields into new fields
-
-For the rec viewer functions(e rec2csv), there are a bunch of Format
-objects you can pass into the functions that will do things like color
-negative values red, set percent formatting and scaling, etc.
-
-Example usage::
-
-    r = csv2rec('somefile.csv', checkrows=0)
-
-    formatd = dict(
-        weight = FormatFloat(2),
-        change = FormatPercent(2),
-        cost   = FormatThousands(2),
-        )
-
-
-    rec2excel(r, 'test.xls', formatd=formatd)
-    rec2csv(r, 'test.csv', formatd=formatd)
-    scroll = rec2gtk(r, formatd=formatd)
-
-    win = gtk.Window()
-    win.set_size_request(600,800)
-    win.add(scroll)
-    win.show_all()
-    gtk.main()
-
-
 """
-
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-from six.moves import map, xrange, zip
 
 import copy
 import csv
@@ -182,24 +70,13 @@ from matplotlib.path import Path
 import math
 
 
-if six.PY3:
-    long = int
-
-
+@cbook.deprecated("2.2", alternative='numpy.logspace or numpy.geomspace')
 def logspace(xmin, xmax, N):
     '''
     Return N values logarithmically spaced between xmin and xmax.
 
     '''
     return np.exp(np.linspace(np.log(xmin), np.log(xmax), N))
-
-
-def _norm(x):
-    '''
-    Return sqrt(x dot x).
-
-    '''
-    return np.sqrt(np.dot(x, x))
 
 
 def window_hanning(x):
@@ -256,7 +133,7 @@ def apply_window(x, window, axis=0, return_window=None):
     xshape = list(x.shape)
     xshapetarg = xshape.pop(axis)
 
-    if cbook.iterable(window):
+    if np.iterable(window):
         if len(window) != xshapetarg:
             raise ValueError('The len(window) must be the same as the shape '
                              'of x for the chosen axis')
@@ -319,7 +196,7 @@ def detrend(x, key=None, axis=None):
         return detrend(x, key=detrend_linear, axis=axis)
     elif key == 'none':
         return detrend(x, key=detrend_none, axis=axis)
-    elif isinstance(key, six.string_types):
+    elif isinstance(key, str):
         raise ValueError("Unknown value for key %s, must be one of: "
                          "'default', 'constant', 'mean', "
                          "'linear', or a function" % key)
@@ -345,6 +222,7 @@ def detrend(x, key=None, axis=None):
         return np.apply_along_axis(key, axis=axis, arr=x)
 
 
+@cbook.deprecated("3.1", alternative="detrend_mean")
 def demean(x, axis=0):
     '''
     Return x minus its mean along the specified axis.
@@ -361,11 +239,6 @@ def demean(x, axis=0):
 
     See Also
     --------
-    :func:`delinear`
-
-    :func:`denone`
-        :func:`delinear` and :func:`denone` are other detrend algorithms.
-
     :func:`detrend_mean`
         This function is the same as :func:`detrend_mean` except for the
         default *axis*.
@@ -407,17 +280,7 @@ def detrend_mean(x, axis=None):
     if axis is not None and axis+1 > x.ndim:
         raise ValueError('axis(=%s) out of bounds' % axis)
 
-    # short-circuit 0-D array.
-    if not x.ndim:
-        return np.array(0., dtype=x.dtype)
-
-    # short-circuit simple operations
-    if axis == 0 or axis is None or x.ndim <= 1:
-        return x - x.mean(axis)
-
-    ind = [slice(None)] * x.ndim
-    ind[axis] = np.newaxis
-    return x - x.mean(axis)[ind]
+    return x - x.mean(axis, keepdims=True)
 
 
 def detrend_none(x, axis=None):
@@ -435,10 +298,6 @@ def detrend_none(x, axis=None):
 
     See Also
     --------
-    :func:`denone`
-        This function is the same as :func:`denone` except for the default
-        *axis*, which has no effect.
-
     :func:`detrend_mean`
 
     :func:`detrend_linear`
@@ -466,10 +325,6 @@ def detrend_linear(y):
 
     See Also
     --------
-    :func:`delinear`
-        This function is the same as :func:`delinear` except for the default
-        *axis*.
-
     :func:`detrend_mean`
 
     :func:`detrend_none`
@@ -720,8 +575,8 @@ def _spectral_helper(x, y=None, NFFT=None, Fs=None, detrend_func=None,
     if not same_data:
         # if same_data is False, mode must be 'psd'
         resultY = stride_windows(y, NFFT, noverlap)
-        resultY = apply_window(resultY, window, axis=0)
         resultY = detrend(resultY, detrend_func, axis=0)
+        resultY = apply_window(resultY, window, axis=0)
         resultY = np.fft.fft(resultY, n=pad_to, axis=0)[:numFreqs, :]
         result = np.conj(result) * resultY
     elif mode == 'psd':
@@ -825,7 +680,7 @@ docstring.interpd.update(Spectral=cbook.dedent("""
         argument, it must take a data segment as an argument and
         return the windowed version of the segment.
 
-    sides : [ 'default' | 'onesided' | 'twosided' ]
+    sides : {'default', 'onesided', 'twosided'}
         Specifies which sides of the spectrum to return.  Default gives the
         default behavior, which returns one-sided for real data and both
         for complex data.  'onesided' forces the return of a one-sided
@@ -834,7 +689,7 @@ docstring.interpd.update(Spectral=cbook.dedent("""
 
 
 docstring.interpd.update(Single_Spectrum=cbook.dedent("""
-    pad_to : integer
+    pad_to : int
         The number of points to which the data segment is padded when
         performing the FFT.  While not increasing the actual resolution of
         the spectrum (the minimum distance between resolvable peaks),
@@ -846,7 +701,7 @@ docstring.interpd.update(Single_Spectrum=cbook.dedent("""
 
 
 docstring.interpd.update(PSD=cbook.dedent("""
-    pad_to : integer
+    pad_to : int
         The number of points to which the data segment is padded when
         performing the FFT.  This can be different from *NFFT*, which
         specifies the number of data points used.  While not increasing
@@ -856,7 +711,7 @@ docstring.interpd.update(PSD=cbook.dedent("""
         in the call to fft(). The default is None, which sets *pad_to*
         equal to *NFFT*
 
-    NFFT : integer
+    NFFT : int
         The number of data points used in each block for the FFT.
         A power 2 is most efficient.  The default value is 256.
         This should *NOT* be used to get zero padding, or the scaling of the
@@ -866,17 +721,17 @@ docstring.interpd.update(PSD=cbook.dedent("""
         The function applied to each segment before fft-ing,
         designed to remove the mean or linear trend.  Unlike in
         MATLAB, where the *detrend* parameter is a vector, in
-        matplotlib is it a function.  The :mod:`~matplotlib.pylab`
-        module defines :func:`~matplotlib.pylab.detrend_none`,
-        :func:`~matplotlib.pylab.detrend_mean`, and
-        :func:`~matplotlib.pylab.detrend_linear`, but you can use
+        matplotlib is it a function.  The :mod:`~matplotlib.mlab`
+        module defines :func:`~matplotlib.mlab.detrend_none`,
+        :func:`~matplotlib.mlab.detrend_mean`, and
+        :func:`~matplotlib.mlab.detrend_linear`, but you can use
         a custom function as well.  You can also use a string to choose
         one of the functions.  'default', 'constant', and 'mean' call
-        :func:`~matplotlib.pylab.detrend_mean`.  'linear' calls
-        :func:`~matplotlib.pylab.detrend_linear`.  'none' calls
-        :func:`~matplotlib.pylab.detrend_none`.
+        :func:`~matplotlib.mlab.detrend_mean`.  'linear' calls
+        :func:`~matplotlib.mlab.detrend_linear`.  'none' calls
+        :func:`~matplotlib.mlab.detrend_none`.
 
-    scale_by_freq : boolean, optional
+    scale_by_freq : bool, optional
         Specifies whether the resulting density values should be scaled
         by the scaling frequency, which gives density in units of Hz^-1.
         This allows for integration over the returned frequency values.
@@ -1344,14 +1199,16 @@ def cohere(x, y, NFFT=256, Fs=2, detrend=detrend_none, window=window_hanning,
                  scale_by_freq)
     Pxy, f = csd(x, y, NFFT, Fs, detrend, window, noverlap, pad_to, sides,
                  scale_by_freq)
-    Cxy = np.abs(Pxy) ** 2 / (Pxx * Pxy)
+    Cxy = np.abs(Pxy) ** 2 / (Pxx * Pyy)
     return Cxy, f
 
 
+@cbook.deprecated('2.2')
 def donothing_callback(*args):
     pass
 
 
+@cbook.deprecated('2.2', 'scipy.signal.coherence')
 def cohere_pairs(X, ij, NFFT=256, Fs=2, detrend=detrend_none,
                  window=window_hanning, noverlap=0,
                  preferSpeedOverMemory=True,
@@ -1377,7 +1234,7 @@ def cohere_pairs(X, ij, NFFT=256, Fs=2, detrend=detrend_none,
     False, limits the caching by only making one, rather than two,
     complex cache arrays. This is useful if memory becomes critical.
     Even when *preferSpeedOverMemory* is False, :func:`cohere_pairs`
-    will still give significant performace gains over calling
+    will still give significant performance gains over calling
     :func:`cohere` for each pair, and will use subtantially less
     memory than if *preferSpeedOverMemory* is True.  In my tests with
     a 43000,64 array over all nonredundant pairs,
@@ -1449,16 +1306,16 @@ def cohere_pairs(X, ij, NFFT=256, Fs=2, detrend=detrend_none,
     else:
         numFreqs = NFFT//2+1
 
-    # cache the FFT of every windowed, detrended NFFT length segement
+    # cache the FFT of every windowed, detrended NFFT length segment
     # of every channel.  If preferSpeedOverMemory, cache the conjugate
     # as well
-    if cbook.iterable(window):
+    if np.iterable(window):
         if len(window) != NFFT:
             raise ValueError("The length of the window must be equal to NFFT")
         windowVals = window
     else:
         windowVals = window(np.ones(NFFT, X.dtype))
-    ind = list(xrange(0, numRows-NFFT+1, NFFT-noverlap))
+    ind = list(range(0, numRows-NFFT+1, NFFT-noverlap))
     numSlices = len(ind)
     FFTSlices = {}
     FFTConjSlices = {}
@@ -1509,6 +1366,7 @@ def cohere_pairs(X, ij, NFFT=256, Fs=2, detrend=detrend_none,
         return Cxy, Phase, freqs
 
 
+@cbook.deprecated('2.2', 'scipy.stats.entropy')
 def entropy(y, bins):
     r"""
     Return the entropy of the data in *y* in units of nat.
@@ -1538,18 +1396,21 @@ def entropy(y, bins):
     return S
 
 
+@cbook.deprecated('2.2', 'scipy.stats.norm.pdf')
 def normpdf(x, *args):
     "Return the normal pdf evaluated at *x*; args provides *mu*, *sigma*"
     mu, sigma = args
     return 1./(np.sqrt(2*np.pi)*sigma)*np.exp(-0.5 * (1./sigma*(x - mu))**2)
 
 
+@cbook.deprecated('2.2')
 def find(condition):
     "Return the indices where ravel(condition) is true"
     res, = np.nonzero(np.ravel(condition))
     return res
 
 
+@cbook.deprecated('2.2')
 def longest_contiguous_ones(x):
     """
     Return the indices of the longest stretch of contiguous ones in *x*,
@@ -1577,11 +1438,13 @@ def longest_contiguous_ones(x):
     return ind
 
 
+@cbook.deprecated('2.2')
 def longest_ones(x):
-    '''alias for longest_contiguous_ones'''
+    '''Alias for longest_contiguous_ones.'''
     return longest_contiguous_ones(x)
 
 
+@cbook.deprecated('2.2')
 class PCA(object):
     def __init__(self, a, standardize=True):
         """
@@ -1667,7 +1530,7 @@ class PCA(object):
         self.s = s**2
 
         # and now the contribution of the individual components
-        vars = self.s/float(len(s))
+        vars = self.s / len(s)
         self.fracs = vars/vars.sum()
 
     def project(self, x, minfrac=0.):
@@ -1717,6 +1580,7 @@ class PCA(object):
         return a
 
 
+@cbook.deprecated('2.2', 'numpy.percentile')
 def prctile(x, p=(0.0, 25.0, 50.0, 75.0, 100.0)):
     """
     Return the percentiles of *x*.  *p* can either be a sequence of
@@ -1756,6 +1620,7 @@ def prctile(x, p=(0.0, 25.0, 50.0, 75.0, 100.0)):
     return _interpolate(values[ai], values[bi], frac)
 
 
+@cbook.deprecated('2.2')
 def prctile_rank(x, p):
     """
     Return the rank for each element in *x*, return the rank
@@ -1769,7 +1634,7 @@ def prctile_rank(x, p):
     indicates how many quantiles of data you want ranked.
     """
 
-    if not cbook.iterable(p):
+    if not np.iterable(p):
         p = np.arange(100.0/p, 100.0, 100.0/p)
     else:
         p = np.asarray(p)
@@ -1781,6 +1646,7 @@ def prctile_rank(x, p):
     return np.searchsorted(ptiles, x)
 
 
+@cbook.deprecated('2.2')
 def center_matrix(M, dim=0):
     """
     Return the matrix *M* with each row having zero mean and unit std.
@@ -1797,6 +1663,7 @@ def center_matrix(M, dim=0):
     return M
 
 
+@cbook.deprecated('2.2', 'scipy.integrate.ode')
 def rk4(derivs, y0, t):
     """
     Integrate 1D or ND system of ODEs using 4-th order Runge-Kutta.
@@ -1851,7 +1718,6 @@ def rk4(derivs, y0, t):
         yout = np.zeros((len(t), Ny), float)
 
     yout[0] = y0
-    i = 0
 
     for i in np.arange(len(t)-1):
 
@@ -1868,6 +1734,7 @@ def rk4(derivs, y0, t):
     return yout
 
 
+@cbook.deprecated('2.2')
 def bivariate_normal(X, Y, sigmax=1.0, sigmay=1.0,
                      mux=0.0, muy=0.0, sigmaxy=0.0):
     """
@@ -1886,6 +1753,7 @@ def bivariate_normal(X, Y, sigmax=1.0, sigmay=1.0,
     return np.exp(-z/(2*(1-rho**2))) / denom
 
 
+@cbook.deprecated('2.2')
 def get_xyz_where(Z, Cond):
     """
     *Z* and *Cond* are *M* x *N* matrices.  *Z* are data and *Cond* is
@@ -1898,6 +1766,7 @@ def get_xyz_where(Z, Cond):
     return X[Cond], Y[Cond], Z[Cond]
 
 
+@cbook.deprecated('2.2')
 def get_sparse_matrix(M, N, frac=0.1):
     """
     Return a *M* x *N* sparse matrix with *frac* elements randomly
@@ -1911,6 +1780,7 @@ def get_sparse_matrix(M, N, frac=0.1):
     return data
 
 
+@cbook.deprecated('2.2', 'numpy.hypot')
 def dist(x, y):
     """
     Return the distance between two points.
@@ -1919,6 +1789,7 @@ def dist(x, y):
     return np.sqrt(np.dot(d, d))
 
 
+@cbook.deprecated('2.2')
 def dist_point_to_segment(p, s0, s1):
     """
     Get the distance of a point to a segment.
@@ -1947,6 +1818,7 @@ def dist_point_to_segment(p, s0, s1):
     return dist(p, pb)
 
 
+@cbook.deprecated('2.2')
 def segments_intersect(s1, s2):
     """
     Return *True* if *s1* and *s2* intersect.
@@ -1973,11 +1845,12 @@ def segments_intersect(s1, s2):
     return 0.0 <= u1 <= 1.0 and 0.0 <= u2 <= 1.0
 
 
+@cbook.deprecated('2.2')
 def fftsurr(x, detrend=detrend_none, window=window_none):
     """
     Compute an FFT phase randomized surrogate of *x*.
     """
-    if cbook.iterable(window):
+    if np.iterable(window):
         x = window*detrend(x)
     else:
         x = window(detrend(x))
@@ -1988,6 +1861,7 @@ def fftsurr(x, detrend=detrend_none, window=window_none):
     return np.fft.ifft(z).real
 
 
+@cbook.deprecated('2.2')
 def movavg(x, n):
     """
     Compute the len(*n*) moving average of *x*.
@@ -2048,6 +1922,7 @@ exp_safe_MIN = math.log(2.2250738585072014e-308)
 exp_safe_MAX = 1.7976931348623157e+308
 
 
+@cbook.deprecated("2.2", 'numpy.exp')
 def exp_safe(x):
     """
     Compute exponentials which safely underflow to zero.
@@ -2063,6 +1938,7 @@ def exp_safe(x):
         return math.exp(x)
 
 
+@cbook.deprecated("2.2", alternative='numpy.array(list(map(...)))')
 def amap(fn, *args):
     """
     amap(function, sequence[, sequence, ...]) -> array.
@@ -2073,6 +1949,7 @@ def amap(fn, *args):
     return np.array(list(map(fn, *args)))
 
 
+@cbook.deprecated("2.2")
 def rms_flat(a):
     """
     Return the root mean square of all the elements of *a*, flattened out.
@@ -2080,6 +1957,7 @@ def rms_flat(a):
     return np.sqrt(np.mean(np.abs(a) ** 2))
 
 
+@cbook.deprecated("2.2", alternative='numpy.linalg.norm(a, ord=1)')
 def l1norm(a):
     """
     Return the *l1* norm of *a*, flattened out.
@@ -2089,6 +1967,7 @@ def l1norm(a):
     return np.sum(np.abs(a))
 
 
+@cbook.deprecated("2.2", alternative='numpy.linalg.norm(a, ord=2)')
 def l2norm(a):
     """
     Return the *l2* norm of *a*, flattened out.
@@ -2098,6 +1977,7 @@ def l2norm(a):
     return np.sqrt(np.sum(np.abs(a) ** 2))
 
 
+@cbook.deprecated("2.2", alternative='numpy.linalg.norm(a.flat, ord=p)')
 def norm_flat(a, p=2):
     """
     norm(a,p=2) -> l-p norm of a.flat
@@ -2115,6 +1995,7 @@ def norm_flat(a, p=2):
         return np.sum(np.abs(a) ** p) ** (1 / p)
 
 
+@cbook.deprecated("2.2", 'numpy.arange')
 def frange(xini, xfin=None, delta=None, **kw):
     """
     frange([start,] stop[, step, keywords]) -> array of floats
@@ -2172,7 +2053,7 @@ def frange(xini, xfin=None, delta=None, **kw):
     # compute # of points, spacing and return final list
     try:
         npts = kw['npts']
-        delta = (xfin-xini)/float(npts-endpoint)
+        delta = (xfin-xini) / (npts-endpoint)
     except KeyError:
         npts = int(np.round((xfin-xini)/delta)) + endpoint
         # round finds the nearest, so the endpoint can be up to
@@ -2182,6 +2063,7 @@ def frange(xini, xfin=None, delta=None, **kw):
 # end frange()
 
 
+@cbook.deprecated("2.2", 'numpy.identity')
 def identity(n, rank=2, dtype='l', typecode=None):
     """
     Returns the identity matrix of shape (*n*, *n*, ..., *n*) (rank *r*).
@@ -2208,6 +2090,7 @@ def identity(n, rank=2, dtype='l', typecode=None):
     return iden
 
 
+@cbook.deprecated("2.2")
 def base_repr(number, base=2, padding=0):
     """
     Return the representation of a *number* in any given *base*.
@@ -2216,13 +2099,14 @@ def base_repr(number, base=2, padding=0):
     if number < base:
         return (padding - 1) * chars[0] + chars[int(number)]
     max_exponent = int(math.log(number)/math.log(base))
-    max_power = long(base) ** max_exponent
+    max_power = int(base) ** max_exponent
     lead_digit = int(number/max_power)
     return (chars[lead_digit] +
             base_repr(number - max_power * lead_digit, base,
                       max(padding - 1, max_exponent)))
 
 
+@cbook.deprecated("2.2")
 def binary_repr(number, max_length=1025):
     """
     Return the binary representation of the input *number* as a
@@ -2245,6 +2129,7 @@ def binary_repr(number, max_length=1025):
     return ''.join(map(repr, digits)).replace('L', '')
 
 
+@cbook.deprecated("2.2", 'numpy.log2')
 def log2(x, ln2=math.log(2.0)):
     """
     Return the log(*x*) in base 2.
@@ -2263,6 +2148,7 @@ def log2(x, ln2=math.log(2.0)):
             return len(bin_n)
 
 
+@cbook.deprecated("2.2")
 def ispower2(n):
     """
     Returns the log base 2 of *n* if *n* is a power of 2, zero otherwise.
@@ -2277,6 +2163,7 @@ def ispower2(n):
         return len(bin_n)
 
 
+@cbook.deprecated("2.2")
 def isvector(X):
     """
     Like the MATLAB function with the same name, returns *True*
@@ -2293,10 +2180,10 @@ def isvector(X):
 
 
 # helpers for loading, saving, manipulating and viewing numpy record arrays
-
+@cbook.deprecated("2.2", 'numpy.isnan')
 def safe_isnan(x):
     ':func:`numpy.isnan` for arbitrary types'
-    if isinstance(x, six.string_types):
+    if isinstance(x, str):
         return False
     try:
         b = np.isnan(x)
@@ -2308,9 +2195,10 @@ def safe_isnan(x):
         return b
 
 
+@cbook.deprecated("2.2", 'numpy.isinf')
 def safe_isinf(x):
     ':func:`numpy.isinf` for arbitrary types'
-    if isinstance(x, six.string_types):
+    if isinstance(x, str):
         return False
     try:
         b = np.isinf(x)
@@ -2322,6 +2210,7 @@ def safe_isinf(x):
         return b
 
 
+@cbook.deprecated("2.2")
 def rec_append_fields(rec, names, arrs, dtypes=None):
     """
     Return a new record array with field names populated with data
@@ -2329,8 +2218,8 @@ def rec_append_fields(rec, names, arrs, dtypes=None):
     *arrs* and *dtypes* do not have to be lists. They can just be the
     values themselves.
     """
-    if (not isinstance(names, six.string_types) and cbook.iterable(names)
-            and len(names) and isinstance(names[0]), six.string_types):
+    if (not isinstance(names, str) and np.iterable(names)
+            and len(names) and isinstance(names[0], str)):
         if len(names) != len(arrs):
             raise ValueError("number of arrays do not match number of names")
     else:  # we have only 1 name and 1 array
@@ -2339,7 +2228,7 @@ def rec_append_fields(rec, names, arrs, dtypes=None):
     arrs = list(map(np.asarray, arrs))
     if dtypes is None:
         dtypes = [a.dtype for a in arrs]
-    elif not cbook.iterable(dtypes):
+    elif not np.iterable(dtypes):
         dtypes = [dtypes]
     if len(arrs) != len(dtypes):
         if len(dtypes) == 1:
@@ -2347,8 +2236,6 @@ def rec_append_fields(rec, names, arrs, dtypes=None):
         else:
             raise ValueError("dtypes must be None, a single dtype or a list")
     old_dtypes = rec.dtype.descr
-    if six.PY2:
-        old_dtypes = [(name.encode('utf-8'), dt) for name, dt in old_dtypes]
     newdtype = np.dtype(old_dtypes + list(zip(names, dtypes)))
     newrec = np.recarray(rec.shape, dtype=newdtype)
     for field in rec.dtype.fields:
@@ -2358,6 +2245,7 @@ def rec_append_fields(rec, names, arrs, dtypes=None):
     return newrec
 
 
+@cbook.deprecated("2.2")
 def rec_drop_fields(rec, names):
     """
     Return a new numpy record array with fields in *names* dropped.
@@ -2375,12 +2263,13 @@ def rec_drop_fields(rec, names):
     return newrec
 
 
+@cbook.deprecated("2.2")
 def rec_keep_fields(rec, names):
     """
     Return a new numpy record array with only fields listed in names
     """
 
-    if isinstance(names, six.string_types):
+    if isinstance(names, str):
         names = names.split(',')
 
     arrays = []
@@ -2390,6 +2279,7 @@ def rec_keep_fields(rec, names):
     return np.rec.fromarrays(arrays, names=names)
 
 
+@cbook.deprecated("2.2")
 def rec_groupby(r, groupby, stats):
     """
     *r* is a numpy record array
@@ -2433,6 +2323,7 @@ def rec_groupby(r, groupby, stats):
     return np.rec.fromrecords(rows, names=names)
 
 
+@cbook.deprecated("2.2")
 def rec_summarize(r, summaryfuncs):
     """
     *r* is a numpy record array
@@ -2455,6 +2346,7 @@ def rec_summarize(r, summaryfuncs):
     return np.rec.fromarrays(arrays, names=names)
 
 
+@cbook.deprecated("2.2")
 def rec_join(key, r1, r2, jointype='inner', defaults=None, r1postfix='1',
              r2postfix='2'):
     """
@@ -2477,7 +2369,7 @@ def rec_join(key, r1, r2, jointype='inner', defaults=None, r1postfix='1',
     (other than keys) that are both in *r1* and *r2*.
     """
 
-    if isinstance(key, six.string_types):
+    if isinstance(key, str):
         key = (key, )
 
     for name in key:
@@ -2522,9 +2414,8 @@ def rec_join(key, r1, r2, jointype='inner', defaults=None, r1postfix='1',
 
         dt2 = r2.dtype[name]
         if dt1 != dt2:
-            msg = "The '{0}' fields in arrays 'r1' and 'r2' must have the same"
-            msg += " dtype."
-            raise ValueError(msg.format(name))
+            raise ValueError("The '{}' fields in arrays 'r1' and 'r2' must "
+                             "have the same dtype".format(name))
         if dt1.num > dt2.num:
             return (name, dt1.descr[0][1])
         else:
@@ -2555,8 +2446,6 @@ def rec_join(key, r1, r2, jointype='inner', defaults=None, r1postfix='1',
     r2desc = [(mapped_r2field(desc[0]), desc[1]) for desc in r2.dtype.descr
               if desc[0] not in key]
     all_dtypes = keydesc + r1desc + r2desc
-    if six.PY2:
-        all_dtypes = [(name.encode('utf-8'), dt) for name, dt in all_dtypes]
     newdtype = np.dtype(all_dtypes)
     newrec = np.recarray((common_len + left_len + right_len,), dtype=newdtype)
 
@@ -2574,7 +2463,7 @@ def rec_join(key, r1, r2, jointype='inner', defaults=None, r1postfix='1',
     if jointype != 'inner' and defaults is not None:
         # fill in the defaults enmasse
         newrec_fields = list(newrec.dtype.fields)
-        for k, v in six.iteritems(defaults):
+        for k, v in defaults.items():
             if k in newrec_fields:
                 newrec[k] = v
 
@@ -2599,6 +2488,7 @@ def rec_join(key, r1, r2, jointype='inner', defaults=None, r1postfix='1',
     return newrec
 
 
+@cbook.deprecated("2.2")
 def recs_join(key, name, recs, jointype='outer', missing=0., postfixes=None):
     """
     Join a sequence of record arrays on single column key.
@@ -2657,6 +2547,7 @@ def recs_join(key, name, recs, jointype='outer', missing=0., postfixes=None):
     return np.rec.fromrecords(results, names=names)
 
 
+@cbook.deprecated("2.2")
 def csv2rec(fname, comments='#', skiprows=0, checkrows=0, delimiter=',',
             converterd=None, names=None, missing='', missingd=None,
             use_mrecords=False, dayfirst=False, yearfirst=False):
@@ -2868,7 +2759,7 @@ def csv2rec(fname, comments='#', skiprows=0, checkrows=0, delimiter=',',
             break
 
         # remove these chars
-        delete = set(r"""~!@#$%^&*()-=+~\|]}[{';: /?.>,<""")
+        delete = set(r"""~!@#$%^&*()-=+~\|}[]{';: /?.>,<""")
         delete.add('"')
 
         names = []
@@ -2888,7 +2779,7 @@ def csv2rec(fname, comments='#', skiprows=0, checkrows=0, delimiter=',',
             seen[item] = cnt+1
 
     else:
-        if isinstance(names, six.string_types):
+        if isinstance(names, str):
             names = [n.strip() for n in names.split(',')]
 
     # get the converter functions by inspecting checkrows
@@ -2911,7 +2802,7 @@ def csv2rec(fname, comments='#', skiprows=0, checkrows=0, delimiter=',',
             break
 
     # iterate over the remaining rows and convert the data to date
-    # objects, ints, or floats as approriate
+    # objects, ints, or floats as appropriate
     rows = []
     rowmasks = []
     for i, row in enumerate(reader):
@@ -2938,6 +2829,7 @@ def csv2rec(fname, comments='#', skiprows=0, checkrows=0, delimiter=',',
 
 
 # a series of classes for describing the format intentions of various rec views
+@cbook.deprecated("2.2")
 class FormatObj(object):
     def tostr(self, x):
         return self.toval(x)
@@ -2956,12 +2848,14 @@ class FormatObj(object):
         return hash(self.__class__)
 
 
+@cbook.deprecated("2.2")
 class FormatString(FormatObj):
     def tostr(self, x):
         val = repr(x)
         return val[1:-1]
 
 
+@cbook.deprecated("2.2")
 class FormatFormatStr(FormatObj):
     def __init__(self, fmt):
         self.fmt = fmt
@@ -2972,6 +2866,7 @@ class FormatFormatStr(FormatObj):
         return self.fmt % self.toval(x)
 
 
+@cbook.deprecated("2.2")
 class FormatFloat(FormatFormatStr):
     def __init__(self, precision=4, scale=1.):
         FormatFormatStr.__init__(self, '%%1.%df' % precision)
@@ -2990,6 +2885,7 @@ class FormatFloat(FormatFormatStr):
         return float(s)/self.scale
 
 
+@cbook.deprecated("2.2")
 class FormatInt(FormatObj):
 
     def tostr(self, x):
@@ -3002,6 +2898,7 @@ class FormatInt(FormatObj):
         return int(s)
 
 
+@cbook.deprecated("2.2")
 class FormatBool(FormatObj):
     def toval(self, x):
         return str(x)
@@ -3010,21 +2907,25 @@ class FormatBool(FormatObj):
         return bool(s)
 
 
+@cbook.deprecated("2.2")
 class FormatPercent(FormatFloat):
     def __init__(self, precision=4):
         FormatFloat.__init__(self, precision, scale=100.)
 
 
+@cbook.deprecated("2.2")
 class FormatThousands(FormatFloat):
     def __init__(self, precision=4):
         FormatFloat.__init__(self, precision, scale=1e-3)
 
 
+@cbook.deprecated("2.2")
 class FormatMillions(FormatFloat):
     def __init__(self, precision=4):
         FormatFloat.__init__(self, precision, scale=1e-6)
 
 
+@cbook.deprecated("2.2", alternative='date.strftime')
 class FormatDate(FormatObj):
     def __init__(self, fmt):
         self.fmt = fmt
@@ -3042,6 +2943,7 @@ class FormatDate(FormatObj):
         return dateutil.parser.parse(x).date()
 
 
+@cbook.deprecated("2.2", alternative='datetime.strftime')
 class FormatDatetime(FormatDate):
     def __init__(self, fmt='%Y-%m-%d %H:%M:%S'):
         FormatDate.__init__(self, fmt)
@@ -3051,20 +2953,19 @@ class FormatDatetime(FormatDate):
         return dateutil.parser.parse(x)
 
 
-defaultformatd = {
-    np.bool_:   FormatBool(),
-    np.int16:   FormatInt(),
-    np.int32:   FormatInt(),
-    np.int64:   FormatInt(),
-    np.float32: FormatFloat(),
-    np.float64: FormatFloat(),
-    np.object_: FormatObj(),
-    np.string_: FormatString(),
-    }
-
-
+@cbook.deprecated("2.2")
 def get_formatd(r, formatd=None):
     'build a formatd guaranteed to have a key for every dtype name'
+    defaultformatd = {
+        np.bool_: FormatBool(),
+        np.int16: FormatInt(),
+        np.int32: FormatInt(),
+        np.int64: FormatInt(),
+        np.float32: FormatFloat(),
+        np.float64: FormatFloat(),
+        np.object_: FormatObj(),
+        np.string_: FormatString()}
+
     if formatd is None:
         formatd = dict()
 
@@ -3077,6 +2978,7 @@ def get_formatd(r, formatd=None):
     return formatd
 
 
+@cbook.deprecated("2.2")
 def csvformat_factory(format):
     format = copy.deepcopy(format)
     if isinstance(format, FormatFloat):
@@ -3085,6 +2987,7 @@ def csvformat_factory(format):
     return format
 
 
+@cbook.deprecated("2.2", alternative='numpy.recarray.tofile')
 def rec2txt(r, header=None, padding=3, precision=3, fields=None):
     """
     Returns a textual representation of a record array.
@@ -3129,7 +3032,7 @@ def rec2txt(r, header=None, padding=3, precision=3, fields=None):
         tdict = {None: int, int: float, float: str}
         try:
             atype(str(item))
-        except:
+        except Exception:
             return get_type(item, tdict[atype])
         return atype
 
@@ -3205,6 +3108,7 @@ def rec2txt(r, header=None, padding=3, precision=3, fields=None):
     return text
 
 
+@cbook.deprecated("2.2", alternative='numpy.recarray.tofile')
 def rec2csv(r, fname, delimiter=',', formatd=None, missing='',
             missingd=None, withheader=True):
     """
@@ -3276,9 +3180,10 @@ def rec2csv(r, fname, delimiter=',', formatd=None, missing='',
         fh.close()
 
 
+@cbook.deprecated('2.2', alternative='scipy.interpolate.griddata')
 def griddata(x, y, z, xi, yi, interp='nn'):
-    """Interpolates from a nonuniformly spaced grid to some other
-    grid.
+    """
+    Interpolates from a nonuniformly spaced grid to some other grid.
 
     Fits a surface of the form z = f(`x`, `y`) to the data in the
     (usually) nonuniformly spaced vectors (`x`, `y`, `z`), then
@@ -3404,6 +3309,7 @@ def griddata(x, y, z, xi, yi, interp='nn'):
 ##################################################
 # Linear interpolation algorithms
 ##################################################
+@cbook.deprecated("2.2", alternative="numpy.interp")
 def less_simple_linear_interpolation(x, y, xi, extrap=False):
     """
     This function provides simple (but somewhat less so than
@@ -3444,6 +3350,7 @@ def less_simple_linear_interpolation(x, y, xi, extrap=False):
     return yi
 
 
+@cbook.deprecated("2.2")
 def slopes(x, y):
     """
     :func:`slopes` calculates the slope *y*'(*x*)
@@ -3485,6 +3392,7 @@ def slopes(x, y):
     return yp
 
 
+@cbook.deprecated("2.2")
 def stineman_interp(xi, x, y, yp=None):
     """
     Given data vectors *x* and *y*, the slope vector *yp* and a new
@@ -3539,7 +3447,6 @@ def stineman_interp(xi, x, y, yp=None):
         yp = np.asarray(yp, float)
 
     xi = np.asarray(xi, float)
-    yi = np.zeros(xi.shape, float)
 
     # calculate linear slopes
     dx = x[1:] - x[:-1]
@@ -3637,7 +3544,7 @@ class GaussianKDE(object):
             raise ValueError("`dataset` input should have multiple elements.")
 
         self.dim, self.num_dp = np.array(self.dataset).shape
-        isString = isinstance(bw_method, six.string_types)
+        isString = isinstance(bw_method, str)
 
         if bw_method is None:
             pass
@@ -3652,9 +3559,8 @@ class GaussianKDE(object):
             self._bw_method = bw_method
             self.covariance_factor = lambda: self._bw_method(self)
         else:
-            msg = "`bw_method` should be 'scott', 'silverman', a scalar " \
-                  "or a callable."
-            raise ValueError(msg)
+            raise ValueError("`bw_method` should be 'scott', 'silverman', a "
+                             "scalar or a callable")
 
         # Computes the covariance matrix for each Gaussian kernel using
         # covariance_factor().
@@ -3709,9 +3615,8 @@ class GaussianKDE(object):
 
         dim, num_m = np.array(points).shape
         if dim != self.dim:
-            msg = "points have dimension %s, dataset has dimension %s" % (
-                dim, self.dim)
-            raise ValueError(msg)
+            raise ValueError("points have dimension {}, dataset has dimension "
+                             "{}".format(dim, self.dim))
 
         result = np.zeros((num_m,), dtype=float)
 
@@ -3740,6 +3645,7 @@ class GaussianKDE(object):
 ##################################################
 # Code related to things in and around polygons
 ##################################################
+@cbook.deprecated("2.2")
 def inside_poly(points, verts):
     """
     *points* is a sequence of *x*, *y* points.
@@ -3755,6 +3661,7 @@ def inside_poly(points, verts):
     return [idx for idx, p in enumerate(points) if poly.contains_point(p)]
 
 
+@cbook.deprecated("2.2")
 def poly_below(xmin, xs, ys):
     """
     Given a sequence of *xs* and *ys*, return the vertices of a
@@ -3785,6 +3692,7 @@ def poly_below(xmin, xs, ys):
     return x, y
 
 
+@cbook.deprecated("2.2")
 def poly_between(x, ylower, yupper):
     """
     Given a sequence of *x*, *ylower* and *yupper*, return the polygon
@@ -3801,10 +3709,10 @@ def poly_between(x, ylower, yupper):
         numpy = np
 
     Nx = len(x)
-    if not cbook.iterable(ylower):
+    if not np.iterable(ylower):
         ylower = ylower*numpy.ones(Nx)
 
-    if not cbook.iterable(yupper):
+    if not np.iterable(yupper):
         yupper = yupper*numpy.ones(Nx)
 
     x = numpy.concatenate((x, x[::-1]))
@@ -3812,6 +3720,7 @@ def poly_between(x, ylower, yupper):
     return x, y
 
 
+@cbook.deprecated('2.2')
 def is_closed_polygon(X):
     """
     Tests whether first and last object in a sequence are the same.  These are
@@ -3821,32 +3730,16 @@ def is_closed_polygon(X):
     return np.all(X[0] == X[-1])
 
 
+@cbook.deprecated("2.2", message='Moved to matplotlib.cbook')
 def contiguous_regions(mask):
     """
     return a list of (ind0, ind1) such that mask[ind0:ind1].all() is
     True and we cover all such regions
     """
-    mask = np.asarray(mask, dtype=bool)
-
-    if not mask.size:
-        return []
-
-    # Find the indices of region changes, and correct offset
-    idx, = np.nonzero(mask[:-1] != mask[1:])
-    idx += 1
-
-    # List operations are faster for moderately sized arrays
-    idx = idx.tolist()
-
-    # Add first and/or last index if needed
-    if mask[0]:
-        idx = [0] + idx
-    if mask[-1]:
-        idx.append(len(mask))
-
-    return list(zip(idx[::2], idx[1::2]))
+    return cbook.contiguous_regions(mask)
 
 
+@cbook.deprecated("2.2")
 def cross_from_below(x, threshold):
     """
     return the indices into *x* where *x* crosses some threshold from
@@ -3861,8 +3754,7 @@ def cross_from_below(x, threshold):
         t = np.arange(0.0, 2.0, 0.1)
         s = np.sin(2*np.pi*t)
 
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots()
         ax.plot(t, s, '-o')
         ax.axhline(0.5)
         ax.axhline(-0.5)
@@ -3888,6 +3780,7 @@ def cross_from_below(x, threshold):
         return ind
 
 
+@cbook.deprecated("2.2")
 def cross_from_above(x, threshold):
     """
     return the indices into *x* where *x* crosses some threshold from
@@ -3911,6 +3804,7 @@ def cross_from_above(x, threshold):
 ##################################################
 # Vector and path length geometry calculations
 ##################################################
+@cbook.deprecated('2.2')
 def vector_lengths(X, P=2., axis=None):
     """
     Finds the length of a set of vectors in *n* dimensions.  This is
@@ -3925,6 +3819,7 @@ def vector_lengths(X, P=2., axis=None):
     return (np.sum(X**(P), axis=axis))**(1./P)
 
 
+@cbook.deprecated('2.2')
 def distances_along_curve(X):
     """
     Computes the distance between a set of successive points in *N* dimensions.
@@ -3937,6 +3832,7 @@ def distances_along_curve(X):
     return vector_lengths(X, axis=1)
 
 
+@cbook.deprecated('2.2')
 def path_length(X):
     """
     Computes the distance travelled along a polygonal curve in *N* dimensions.
@@ -3949,6 +3845,7 @@ def path_length(X):
     return np.concatenate((np.zeros(1), np.cumsum(X)))
 
 
+@cbook.deprecated('2.2')
 def quad2cubic(q0x, q0y, q1x, q1y, q2x, q2y):
     """
     Converts a quadratic Bezier curve to a cubic approximation.
@@ -3966,6 +3863,7 @@ def quad2cubic(q0x, q0y, q1x, q1y, q2x, q2y):
     return q0x, q0y, c1x, c1y, c2x, c2y, q2x, q2y
 
 
+@cbook.deprecated("2.2")
 def offset_line(y, yerr):
     """
     Offsets an array *y* by +/- an error and returns a tuple
@@ -3979,16 +3877,18 @@ def offset_line(y, yerr):
     * A tuple of length 2. In this case, yerr[0] is the error below *y* and
       yerr[1] is error above *y*. For example::
 
-        from pylab import *
-        x = linspace(0, 2*pi, num=100, endpoint=True)
-        y = sin(x)
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+        x = np.linspace(0, 2*np.pi, num=100, endpoint=True)
+        y = np.sin(x)
         y_minus, y_plus = mlab.offset_line(y, 0.1)
-        plot(x, y)
-        fill_between(x, ym, y2=yp)
-        show()
+        plt.plot(x, y)
+        plt.fill_between(x, y_minus, y2=y_plus)
+        plt.show()
 
     """
-    if cbook.is_numlike(yerr) or (cbook.iterable(yerr) and
+    if cbook.is_numlike(yerr) or (np.iterable(yerr) and
                                   len(yerr) == len(y)):
         ymin = y - yerr
         ymax = y + yerr

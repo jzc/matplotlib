@@ -1,28 +1,26 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
 import copy
+from unittest import mock
 
 import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib._pylab_helpers import Gcf
 
-from numpy.testing import assert_equal
-
 import pytest
-try:
-    # mock in python 3.3+
-    from unittest import mock
-except ImportError:
-    import mock
 
-with matplotlib.rc_context(rc={'backend': 'Qt5Agg'}):
-    qt_compat = pytest.importorskip('matplotlib.backends.qt_compat',
-                                    minversion='5')
+try:
+    import PyQt5
+except (ImportError, RuntimeError):  # RuntimeError if PyQt4 already imported.
+    try:
+        import PySide2
+    except ImportError:
+        pytestmark = pytest.mark.skip("Failed to import a Qt5 binding.")
+
+qt_compat = pytest.importorskip('matplotlib.backends.qt_compat')
+QtCore = qt_compat.QtCore
+
 from matplotlib.backends.backend_qt5 import (
     MODIFIER_KEYS, SUPER, ALT, CTRL, SHIFT)  # noqa
 
-QtCore = qt_compat.QtCore
 _, ControlModifier, ControlKey = MODIFIER_KEYS[CTRL]
 _, AltModifier, AltKey = MODIFIER_KEYS[ALT]
 _, SuperModifier, SuperKey = MODIFIER_KEYS[SUPER]
@@ -136,14 +134,19 @@ def test_dpi_ratio_change():
         # The actual widget size and figure physical size don't change
         assert size.width() == 600
         assert size.height() == 240
-        assert_equal(qt_canvas.get_width_height(), (600, 240))
-        assert_equal(fig.get_size_inches(), (5, 2))
+        assert qt_canvas.get_width_height() == (600, 240)
+        assert (fig.get_size_inches() == (5, 2)).all()
 
         p.return_value = 2
 
         assert qt_canvas._dpi_ratio == 2
 
         qt_canvas.draw()
+        qApp.processEvents()
+        # this second processEvents is required to fully run the draw.
+        # On `update` we notice the DPI has changed and trigger a
+        # resize event to refresh, the second processEvents is
+        # required to process that and fully update the window sizes.
         qApp.processEvents()
 
         # The DPI and the renderer width/height change
@@ -154,5 +157,25 @@ def test_dpi_ratio_change():
         # The actual widget size and figure physical size don't change
         assert size.width() == 600
         assert size.height() == 240
-        assert_equal(qt_canvas.get_width_height(), (600, 240))
-        assert_equal(fig.get_size_inches(), (5, 2))
+        assert qt_canvas.get_width_height() == (600, 240)
+        assert (fig.get_size_inches() == (5, 2)).all()
+
+
+@pytest.mark.backend('Qt5Agg')
+def test_subplottool():
+    fig, ax = plt.subplots()
+    with mock.patch(
+            "matplotlib.backends.backend_qt5.SubplotToolQt.exec_",
+            lambda self: None):
+        fig.canvas.manager.toolbar.configure_subplots()
+
+
+@pytest.mark.backend('Qt5Agg')
+def test_figureoptions():
+    fig, ax = plt.subplots()
+    ax.plot([1, 2])
+    ax.imshow([[1]])
+    with mock.patch(
+            "matplotlib.backends.qt_editor.formlayout.FormDialog.exec_",
+            lambda self: None):
+        fig.canvas.manager.toolbar.edit_parameters()

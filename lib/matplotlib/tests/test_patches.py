@@ -1,24 +1,17 @@
 """
 Tests specific to the patches module.
 """
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-
 import numpy as np
 from numpy.testing import assert_almost_equal, assert_array_equal
 import pytest
 
-from matplotlib.patches import Polygon
-from matplotlib.patches import Rectangle
-from matplotlib.testing.decorators import image_comparison
+from matplotlib.cbook import MatplotlibDeprecationWarning
+from matplotlib.patches import Polygon, Rectangle
+from matplotlib.testing.decorators import image_comparison, check_figures_equal
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import matplotlib.collections as mcollections
-from matplotlib import path as mpath
-from matplotlib import transforms as mtransforms
-import matplotlib.style as mstyle
+from matplotlib import (
+    collections as mcollections, colors as mcolors, patches as mpatches,
+    path as mpath, style as mstyle, transforms as mtransforms)
 
 import sys
 on_win = (sys.platform == 'win32')
@@ -258,10 +251,10 @@ def test_wedge_movement():
                   'theta1': (0, 30, 'set_theta1'),
                   'theta2': (45, 50, 'set_theta2')}
 
-    init_args = dict((k, v[0]) for (k, v) in six.iteritems(param_dict))
+    init_args = {k: v[0] for k, v in param_dict.items()}
 
     w = mpatches.Wedge(**init_args)
-    for attr, (old_v, new_v, func) in six.iteritems(param_dict):
+    for attr, (old_v, new_v, func) in param_dict.items():
         assert getattr(w, attr) == old_v
         getattr(w, func)(new_v)
         assert getattr(w, attr) == new_v
@@ -321,6 +314,44 @@ def test_patch_str():
     expected = 'Arc(xy=(1, 2), width=3, height=4, angle=5, theta1=6, theta2=7)'
     assert str(p) == expected
 
+    p = mpatches.RegularPolygon((1, 2), 20, radius=5)
+    assert str(p) == "RegularPolygon((1, 2), 20, radius=5, orientation=0)"
+
+    p = mpatches.CirclePolygon(xy=(1, 2), radius=5, resolution=20)
+    assert str(p) == "CirclePolygon((1, 2), radius=5, resolution=20)"
+
+    p = mpatches.FancyBboxPatch((1, 2), width=3, height=4)
+    assert str(p) == "FancyBboxPatch((1, 2), width=3, height=4)"
+
+    # Further nice __str__ which cannot be `eval`uated:
+    path_data = [([1, 2], mpath.Path.MOVETO), ([2, 2], mpath.Path.LINETO),
+                 ([1, 2], mpath.Path.CLOSEPOLY)]
+    p = mpatches.PathPatch(mpath.Path(*zip(*path_data)))
+    assert str(p) == "PathPatch3((1, 2) ...)"
+
+    data = [[1, 2], [2, 2], [1, 2]]
+    p = mpatches.Polygon(data)
+    assert str(p) == "Polygon3((1, 2) ...)"
+
+    p = mpatches.FancyArrowPatch(path=mpath.Path(*zip(*path_data)))
+    assert str(p)[:27] == "FancyArrowPatch(Path(array("
+
+    p = mpatches.FancyArrowPatch((1, 2), (3, 4))
+    assert str(p) == "FancyArrowPatch((1, 2)->(3, 4))"
+
+    p = mpatches.ConnectionPatch((1, 2), (3, 4), 'data')
+    assert str(p) == "ConnectionPatch((1, 2), (3, 4))"
+
+    s = mpatches.Shadow(p, 1, 1)
+    assert str(s) == "Shadow(ConnectionPatch((1, 2), (3, 4)))"
+
+    with pytest.warns(MatplotlibDeprecationWarning):
+        p = mpatches.YAArrow(plt.gcf(), (1, 0), (2, 1), width=0.1)
+        assert str(p) == "YAArrow()"
+
+    # Not testing Arrow, FancyArrow here
+    # because they seem to exist only for historical reasons.
+
 
 @image_comparison(baseline_images=['multi_color_hatch'],
                   remove_text=True, style='default')
@@ -335,23 +366,8 @@ def test_multi_color_hatch():
 
     for i in range(5):
         with mstyle.context({'hatch.color': 'C{}'.format(i)}):
-            r = Rectangle((i-.8/2, 5), .8, 1, hatch='//', fc='none')
+            r = Rectangle((i - .8 / 2, 5), .8, 1, hatch='//', fc='none')
         ax.add_patch(r)
-
-
-@image_comparison(baseline_images=['polar_proj'], extensions=['png'],
-                  style='default')
-def test_adding_rectangle_patch_with_polar_projection():
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='polar')
-
-    # add quadrant as example
-    ax.add_patch(
-        mpatches.Rectangle(
-            (0, 1), width=np.pi * 0.5, height=0.5
-        )
-    )
-    ax.set_rmax(2)
 
 
 @image_comparison(baseline_images=['units_rectangle'], extensions=['png'])
@@ -365,3 +381,90 @@ def test_units_rectangle():
     ax.add_patch(p)
     ax.set_xlim([4*U.km, 7*U.km])
     ax.set_ylim([5*U.km, 9*U.km])
+
+
+@image_comparison(baseline_images=['connection_patch'], extensions=['png'],
+                  style='mpl20', remove_text=True)
+def test_connection_patch():
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+
+    con = mpatches.ConnectionPatch(xyA=(0.1, 0.1), xyB=(0.9, 0.9),
+                                   coordsA='data', coordsB='data',
+                                   axesA=ax2, axesB=ax1,
+                                   arrowstyle="->")
+    ax2.add_artist(con)
+
+
+def test_datetime_rectangle():
+    # Check that creating a rectangle with timedeltas doesn't fail
+    from datetime import datetime, timedelta
+
+    start = datetime(2017, 1, 1, 0, 0, 0)
+    delta = timedelta(seconds=16)
+    patch = mpatches.Rectangle((start, 0), delta, 1)
+
+    fig, ax = plt.subplots()
+    ax.add_patch(patch)
+
+
+def test_datetime_datetime_fails():
+    from datetime import datetime
+
+    start = datetime(2017, 1, 1, 0, 0, 0)
+    dt_delta = datetime(1970, 1, 5)    # Will be 5 days if units are done wrong
+
+    with pytest.raises(TypeError):
+        mpatches.Rectangle((start, 0), dt_delta, 1)
+
+    with pytest.raises(TypeError):
+        mpatches.Rectangle((0, start), 1, dt_delta)
+
+
+def test_contains_point():
+    ell = mpatches.Ellipse((0.5, 0.5), 0.5, 1.0, 0)
+    points = [(0.0, 0.5), (0.2, 0.5), (0.25, 0.5), (0.5, 0.5)]
+    path = ell.get_path()
+    transform = ell.get_transform()
+    radius = ell._process_radius(None)
+    expected = np.array([path.contains_point(point,
+                                             transform,
+                                             radius) for point in points])
+    result = np.array([ell.contains_point(point) for point in points])
+    assert np.all(result == expected)
+
+
+def test_contains_points():
+    ell = mpatches.Ellipse((0.5, 0.5), 0.5, 1.0, 0)
+    points = [(0.0, 0.5), (0.2, 0.5), (0.25, 0.5), (0.5, 0.5)]
+    path = ell.get_path()
+    transform = ell.get_transform()
+    radius = ell._process_radius(None)
+    expected = path.contains_points(points, transform, radius)
+    result = ell.contains_points(points)
+    assert np.all(result == expected)
+
+
+# Currently fails with pdf/svg, probably because some parts assume a dpi of 72.
+@check_figures_equal(extensions=["png"])
+def test_shadow(fig_test, fig_ref):
+    xy = np.array([.2, .3])
+    dxy = np.array([.1, .2])
+    # We need to work around the nonsensical (dpi-dependent) interpretation of
+    # offsets by the Shadow class...
+    plt.rcParams["savefig.dpi"] = "figure"
+    # Test image.
+    a1 = fig_test.subplots()
+    rect = mpatches.Rectangle(xy=xy, width=.5, height=.5)
+    shadow = mpatches.Shadow(rect, ox=dxy[0], oy=dxy[1])
+    a1.add_patch(rect)
+    a1.add_patch(shadow)
+    # Reference image.
+    a2 = fig_ref.subplots()
+    rect = mpatches.Rectangle(xy=xy, width=.5, height=.5)
+    shadow = mpatches.Rectangle(
+        xy=xy + fig_ref.dpi / 72 * dxy, width=.5, height=.5,
+        fc=np.asarray(mcolors.to_rgb(rect.get_facecolor())) * .3,
+        ec=np.asarray(mcolors.to_rgb(rect.get_facecolor())) * .3,
+        alpha=.5)
+    a2.add_patch(shadow)
+    a2.add_patch(rect)

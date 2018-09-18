@@ -4,8 +4,8 @@
  *
  */
 
-#ifndef _IMAGE_H
-#define _IMAGE_H
+#ifndef MPL_IMAGE_H
+#define MPL_IMAGE_H
 
 #include <vector>
 
@@ -21,8 +21,6 @@ void _bin_indices_middle_linear(float *arows,
                                 float dy,
                                 float y_min);
 void _bin_indices(int *irows, int nrows, const double *y, unsigned long ny, double sc, double offs);
-void _bin_indices_linear(
-    float *arows, int *irows, int nrows, double *y, unsigned long ny, double sc, double offs);
 
 template <class CoordinateArray, class ColorArray, class OutputArray>
 void pcolor(CoordinateArray &x,
@@ -35,7 +33,7 @@ void pcolor(CoordinateArray &x,
             OutputArray &out)
 {
     if (rows >= 32768 || cols >= 32768) {
-        throw "rows and cols must both be less than 32768";
+        throw std::runtime_error("rows and cols must both be less than 32768");
     }
 
     float x_min = bounds[0];
@@ -49,18 +47,18 @@ void pcolor(CoordinateArray &x,
 
     // Check we have something to output to
     if (rows == 0 || cols == 0) {
-        throw "Cannot scale to zero size";
+        throw std::runtime_error("Cannot scale to zero size");
     }
 
     if (d.dim(2) != 4) {
-        throw "data must be in RGBA format";
+        throw std::runtime_error("data must be in RGBA format");
     }
 
     // Check dimensions match
     unsigned long nx = x.dim(0);
     unsigned long ny = y.dim(0);
     if (nx != (unsigned long)d.dim(1) || ny != (unsigned long)d.dim(0)) {
-        throw "data and axis dimensions do not match";
+        throw std::runtime_error("data and axis dimensions do not match");
     }
 
     // Allocate memory for pointer arrays
@@ -150,22 +148,22 @@ void pcolor2(CoordinateArray &x,
 
     // Check we have something to output to
     if (rows == 0 || cols == 0) {
-        throw "rows or cols is zero; there are no pixels";
+        throw std::runtime_error("rows or cols is zero; there are no pixels");
     }
 
     if (d.dim(2) != 4) {
-        throw "data must be in RGBA format";
+        throw std::runtime_error("data must be in RGBA format");
     }
 
     // Check dimensions match
     unsigned long nx = x.dim(0);
     unsigned long ny = y.dim(0);
     if (nx != (unsigned long)d.dim(1) + 1 || ny != (unsigned long)d.dim(0) + 1) {
-        throw "data and axis bin boundary dimensions are incompatible";
+        throw std::runtime_error("data and axis bin boundary dimensions are incompatible");
     }
 
     if (bg.dim(0) != 4) {
-        throw "bg must be in RGBA format";
+        throw std::runtime_error("bg must be in RGBA format");
     }
 
     std::vector<int> irows(rows);

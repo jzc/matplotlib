@@ -1,24 +1,26 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+import copy
+from unittest import mock
 
+import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib._pylab_helpers import Gcf
-import matplotlib
-import copy
 
 import pytest
-try:
-    # mock in python 3.3+
-    from unittest import mock
-except ImportError:
-    import mock
 
-with matplotlib.rc_context(rc={'backend': 'Qt4Agg'}):
-    qt_compat = pytest.importorskip('matplotlib.backends.qt_compat')
+try:
+    import PyQt4
+except (ImportError, RuntimeError):  # RuntimeError if PyQt5 already imported.
+    try:
+        import PySide
+    except ImportError:
+        pytestmark = pytest.mark.skip("Failed to import a Qt4 binding.")
+
+qt_compat = pytest.importorskip('matplotlib.backends.qt_compat')
+QtCore = qt_compat.QtCore
+
 from matplotlib.backends.backend_qt4 import (
     MODIFIER_KEYS, SUPER, ALT, CTRL, SHIFT)  # noqa
 
-QtCore = qt_compat.QtCore
 _, ControlModifier, ControlKey = MODIFIER_KEYS[CTRL]
 _, AltModifier, AltKey = MODIFIER_KEYS[ALT]
 _, SuperModifier, SuperKey = MODIFIER_KEYS[SUPER]
@@ -30,7 +32,7 @@ except AttributeError:
     py_qt_ver = QtCore.__version_info__[0]
 
 if py_qt_ver != 4:
-    pytestmark = pytest.mark.xfail(reason='Qt4 is not available')
+    pytestmark = pytest.mark.skipif(reason='Qt4 is not available')
 
 
 @pytest.mark.backend('Qt4Agg')

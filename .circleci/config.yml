@@ -47,28 +47,34 @@ fonts-run:  &fonts-install
       echo "Not downloading Humor-Sans; file already exists."
     fi
     fc-cache -f -v
+  save_cache:
+    key: fonts-1
+    paths:
+      - ~/.local/share/fonts/
+  restore_cache:
+    key: fonts-1
 
 pip-run:  &pip-install
   # Upgrade pip and setuptools and wheel to get as clean an install as possible
   name: Upgrade pip, setuptools, wheel
   command: |
-    pip install --upgrade --user pip
-    pip install --upgrade --user wheel
-    pip install --upgrade --user setuptools
+    python -mpip install --upgrade --user pip
+    python -mpip install --upgrade --user wheel
+    python -mpip install --upgrade --user setuptools
 
 deps-run: &deps-install
   name: Install Python dependencies
   command: |
-    pip install --user python-dateutil numpy${NUMPY_VERSION} pyparsing!=2.1.6 cycler codecov coverage sphinx pillow
-    pip install --user -r doc-requirements.txt
+    python -mpip install --user numpy${NUMPY_VERSION} codecov coverage
+    python -mpip install --user -r doc-requirements.txt
 
 mpl-run: &mpl-install
   name: Install Matplotlib
-  command: pip install --user -ve .
+  command: python -mpip install --user -ve .
 
 doc-run: &doc-build
   name: Build documentation
-  command: python make.py html
+  command: make html
   working_directory: doc
 
 doc-bundle-run: &doc-bundle
@@ -82,9 +88,9 @@ doc-bundle-run: &doc-bundle
 #
 
 jobs:
-  docs-python35:
+  docs-python36:
     docker:
-      - image: circleci/python:3.5
+      - image: circleci/python:3.6
     steps:
       - checkout
 
@@ -115,9 +121,9 @@ jobs:
           name: "Deploy new docs"
           command: ./.circleci/deploy-docs.sh
 
-  docs-python27:
+  docs-python35:
     docker:
-      - image: circleci/python:2.7
+      - image: circleci/python:3.5
     steps:
       - checkout
 
@@ -128,22 +134,13 @@ jobs:
       - run:
           <<: *deps-install
           environment:
-            NUMPY_VERSION: "==1.7.1"
-      # Linkchecker only works with python 2.7 for the time being.
-      # Linkchecker is currently broken with requests 2.10.0 so force an earlier version.
-      - run: pip install --user $PRE requests==2.9.2 linkchecker
+            NUMPY_VERSION: "==1.10.0"
       - run: *mpl-install
 
       - run: *doc-build
 
       # We don't build the LaTeX docs here, so linkchecker will complain
       - run: touch doc/build/html/Matplotlib.pdf
-
-      # Linkchecker only works with python 2.7 for the time being
-      - run:
-          name: linkchecker
-          command: ~/.local/bin/linkchecker build/html/index.html
-          working_directory: doc
 
       - run: *doc-bundle
       - store_artifacts:
@@ -166,4 +163,4 @@ workflows:
   build:
     jobs:
       - docs-python35
-      - docs-python27
+      - docs-python36

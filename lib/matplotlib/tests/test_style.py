@@ -1,20 +1,16 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import os
-import shutil
-import tempfile
-import warnings
 from collections import OrderedDict
 from contextlib import contextmanager
+import gc
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import warnings
 
 import pytest
 
 import matplotlib as mpl
-from matplotlib import style
+from matplotlib import pyplot as plt, style
 from matplotlib.style.core import USER_LIBRARY_PATHS, STYLE_EXTENSION
 
-import six
 
 PARAM = 'image.cmap'
 VALUE = 'pink'
@@ -27,27 +23,22 @@ def temp_style(style_name, settings=None):
     if not settings:
         settings = DUMMY_SETTINGS
     temp_file = '%s.%s' % (style_name, STYLE_EXTENSION)
-
-    # Write style settings to file in the temp directory.
-    tempdir = tempfile.mkdtemp()
-    with open(os.path.join(tempdir, temp_file), 'w') as f:
-        for k, v in six.iteritems(settings):
-            f.write('%s: %s' % (k, v))
-
-    # Add temp directory to style path and reload so we can access this style.
-    USER_LIBRARY_PATHS.append(tempdir)
-    style.reload_library()
-
     try:
-        yield
+        with TemporaryDirectory() as tmpdir:
+            # Write style settings to file in the tmpdir.
+            Path(tmpdir, temp_file).write_text(
+                "\n".join("{}: {}".format(k, v) for k, v in settings.items()))
+            # Add tmpdir to style path and reload so we can access this style.
+            USER_LIBRARY_PATHS.append(tmpdir)
+            style.reload_library()
+            yield
     finally:
-        shutil.rmtree(tempdir)
         style.reload_library()
 
 
-def test_deprecated_rc_warning_includes_filename():
-    SETTINGS = {'axes.color_cycle': 'ffffff'}
-    basename = 'color_cycle'
+def test_invalid_rc_warning_includes_filename():
+    SETTINGS = {'foo': 'bar'}
+    basename = 'basename'
     with warnings.catch_warnings(record=True) as warns:
         with temp_style(basename, SETTINGS):
             # style.reload_library() in temp_style() triggers the warning
@@ -158,3 +149,18 @@ def test_alias(equiv_styles):
     rc_base = rc_dicts[0]
     for nm, rc in zip(equiv_styles[1:], rc_dicts[1:]):
         assert rc_base == rc
+
+
+def test_xkcd_no_cm():
+    assert mpl.rcParams["path.sketch"] is None
+    plt.xkcd()
+    assert mpl.rcParams["path.sketch"] == (1, 100, 2)
+    gc.collect()
+    assert mpl.rcParams["path.sketch"] == (1, 100, 2)
+
+
+def test_xkcd_cm():
+    assert mpl.rcParams["path.sketch"] is None
+    with plt.xkcd():
+        assert mpl.rcParams["path.sketch"] == (1, 100, 2)
+    assert mpl.rcParams["path.sketch"] is None

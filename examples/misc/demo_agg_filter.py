@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import matplotlib.cm as cm
-import matplotlib.mlab as mlab
 import matplotlib.transforms as mtransforms
 from matplotlib.colors import LightSource
 from matplotlib.artist import Artist
@@ -187,10 +186,9 @@ def filtered_text(ax):
     x = np.arange(-3.0, 3.0, delta)
     y = np.arange(-2.0, 2.0, delta)
     X, Y = np.meshgrid(x, y)
-    Z1 = mlab.bivariate_normal(X, Y, 1.0, 1.0, 0.0, 0.0)
-    Z2 = mlab.bivariate_normal(X, Y, 1.5, 0.5, 1, 1)
-    # difference of Gaussians
-    Z = 10.0 * (Z2 - Z1)
+    Z1 = np.exp(-X**2 - Y**2)
+    Z2 = np.exp(-(X - 1)**2 - (Y - 1)**2)
+    Z = (Z1 - Z2) * 2
 
     # draw
     im = ax.imshow(Z, interpolation='bilinear', origin='lower',
@@ -311,7 +309,7 @@ def light_filter_pie(ax):
 
 if 1:
 
-    plt.figure(1, figsize=(6, 6))
+    plt.figure(figsize=(6, 6))
     plt.subplots_adjust(left=0.05, right=0.95)
 
     ax = plt.subplot(221)

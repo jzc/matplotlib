@@ -1,36 +1,29 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
 from collections import OrderedDict
 
-import six
-from six import unichr
-from six.moves import xrange
-
-import os, base64, tempfile, gzip, io, sys, codecs, re
+import base64
+import gzip
+import hashlib
+import io
+import logging
+import re
+import uuid
 
 import numpy as np
 
-from hashlib import md5
-import uuid
-
-from matplotlib import verbose, __version__, rcParams
+from matplotlib import cbook, __version__, rcParams
 from matplotlib.backend_bases import (
-     _Backend, FigureCanvasBase, FigureManagerBase, GraphicsContextBase,
-    RendererBase)
+     _Backend, FigureCanvasBase, FigureManagerBase, RendererBase)
 from matplotlib.backends.backend_mixed import MixedModeRenderer
-from matplotlib.cbook import is_writable_file_like, maxdict
 from matplotlib.colors import rgb2hex
-from matplotlib.figure import Figure
-from matplotlib.font_manager import findfont, FontProperties, get_font
-from matplotlib.ft2font import KERNING_DEFAULT, LOAD_NO_HINTING
+from matplotlib.font_manager import findfont, get_font
+from matplotlib.ft2font import LOAD_NO_HINTING
 from matplotlib.mathtext import MathTextParser
 from matplotlib.path import Path
 from matplotlib import _path
 from matplotlib.transforms import Affine2D, Affine2DBase
 from matplotlib import _png
 
-from xml.sax.saxutils import escape as escape_xml_text
+_log = logging.getLogger(__name__)
 
 backend_version = __version__
 
@@ -71,16 +64,21 @@ backend_version = __version__
 # OF THIS SOFTWARE.
 # --------------------------------------------------------------------
 
+
 def escape_cdata(s):
     s = s.replace("&", "&amp;")
     s = s.replace("<", "&lt;")
     s = s.replace(">", "&gt;")
     return s
 
+
 _escape_xml_comment = re.compile(r'-(?=-)')
+
+
 def escape_comment(s):
     s = escape_cdata(s)
     return _escape_xml_comment.sub('- ', s)
+
 
 def escape_attrib(s):
     s = s.replace("&", "&amp;")
@@ -90,6 +88,7 @@ def escape_attrib(s):
     s = s.replace(">", "&gt;")
     return s
 
+
 def short_float_fmt(x):
     """
     Create a short string representation of a float, which is %f
@@ -97,18 +96,19 @@ def short_float_fmt(x):
     """
     return '{0:f}'.format(x).rstrip('0').rstrip('.')
 
-##
-# XML writer class.
-#
-# @param file A file or file-like object.  This object must implement
-#    a <b>write</b> method that takes an 8-bit string.
 
 class XMLWriter(object):
+    """
+    Parameters
+    ----------
+    file : writable text file-like object
+    """
+
     def __init__(self, file):
         self.__write = file.write
         if hasattr(file, "flush"):
             self.flush = file.flush
-        self.__open = 0 # true if start tag is open
+        self.__open = 0  # true if start tag is open
         self.__tags = []
         self.__data = []
         self.__indentation = " " * 64
@@ -126,65 +126,78 @@ class XMLWriter(object):
             self.__write(escape_cdata(data))
             self.__data = []
 
-    ## Opens a new element.  Attributes can be given as keyword
-    # arguments, or as a string/string dictionary. The method returns
-    # an opaque identifier that can be passed to the <b>close</b>
-    # method, to close all open elements up to and including this one.
-    #
-    # @param tag Element tag.
-    # @param attrib Attribute dictionary.  Alternatively, attributes
-    #    can be given as keyword arguments.
-    # @return An element identifier.
-
     def start(self, tag, attrib={}, **extra):
+        """
+        Opens a new element.  Attributes can be given as keyword
+        arguments, or as a string/string dictionary. The method returns
+        an opaque identifier that can be passed to the :meth:`close`
+        method, to close all open elements up to and including this one.
+
+        Parameters
+        ----------
+        tag
+            Element tag.
+        attrib
+            Attribute dictionary.  Alternatively, attributes can be given as
+            keyword arguments.
+
+        Returns
+        -------
+        An element identifier.
+        """
         self.__flush()
         tag = escape_cdata(tag)
         self.__data = []
         self.__tags.append(tag)
         self.__write(self.__indentation[:len(self.__tags) - 1])
         self.__write("<%s" % tag)
-        if attrib or extra:
-            attrib = attrib.copy()
-            attrib.update(extra)
-            attrib = sorted(six.iteritems(attrib))
-            for k, v in attrib:
-                if not v == '':
-                    k = escape_cdata(k)
-                    v = escape_attrib(v)
-                    self.__write(" %s=\"%s\"" % (k, v))
+        for k, v in sorted({**attrib, **extra}.items()):
+            if not v == '':
+                k = escape_cdata(k)
+                v = escape_attrib(v)
+                self.__write(" %s=\"%s\"" % (k, v))
         self.__open = 1
         return len(self.__tags)-1
 
-    ##
-    # Adds a comment to the output stream.
-    #
-    # @param comment Comment text, as a Unicode string.
-
     def comment(self, comment):
+        """
+        Adds a comment to the output stream.
+
+        Parameters
+        ----------
+        comment : str
+            Comment text.
+        """
         self.__flush()
         self.__write(self.__indentation[:len(self.__tags)])
         self.__write("<!-- %s -->\n" % escape_comment(comment))
 
-    ##
-    # Adds character data to the output stream.
-    #
-    # @param text Character data, as a Unicode string.
-
     def data(self, text):
+        """
+        Adds character data to the output stream.
+
+        Parameters
+        ----------
+        text : str
+            Character data.
+        """
         self.__data.append(text)
 
-    ##
-    # Closes the current element (opened by the most recent call to
-    # <b>start</b>).
-    #
-    # @param tag Element tag.  If given, the tag must match the start
-    #    tag.  If omitted, the current element is closed.
-
     def end(self, tag=None, indent=True):
+        """
+        Closes the current element (opened by the most recent call to
+        :meth:`start`).
+
+        Parameters
+        ----------
+        tag
+            Element tag.  If given, the tag must match the start tag.  If
+            omitted, the current element is closed.
+       """
         if tag:
             assert self.__tags, "unbalanced end(%s)" % tag
-            assert escape_cdata(tag) == self.__tags[-1],\
-                   "expected end(%s), got %s" % (self.__tags[-1], tag)
+            assert escape_cdata(tag) == self.__tags[-1], \
+                "expected end(%s), got %s" % (self.__tags[-1], tag)
         else:
             assert self.__tags, "unbalanced end()"
         tag = self.__tags.pop()
@@ -198,57 +211,55 @@ class XMLWriter(object):
             self.__write(self.__indentation[:len(self.__tags)])
         self.__write("</%s>\n" % tag)
 
-    ##
-    # Closes open elements, up to (and including) the element identified
-    # by the given identifier.
-    #
-    # @param id Element identifier, as returned by the <b>start</b> method.
-
     def close(self, id):
+        """
+        Closes open elements, up to (and including) the element identified
+        by the given identifier.
+
+        Parameters
+        ----------
+        id
+            Element identifier, as returned by the :meth:`start` method.
+        """
         while len(self.__tags) > id:
             self.end()
 
-    ##
-    # Adds an entire element.  This is the same as calling <b>start</b>,
-    # <b>data</b>, and <b>end</b> in sequence. The <b>text</b> argument
-    # can be omitted.
-
     def element(self, tag, text=None, attrib={}, **extra):
+        """
+        Adds an entire element.  This is the same as calling :meth:`start`,
+        :meth:`data`, and :meth:`end` in sequence. The *text* argument can be
+        omitted.
+        """
         self.start(*(tag, attrib), **extra)
         if text:
             self.data(text)
         self.end(indent=False)
 
-    ##
-    # Flushes the output stream.
-
     def flush(self):
-        pass # replaced by the constructor
+        """Flushes the output stream."""
+        pass  # replaced by the constructor
 
-# ----------------------------------------------------------------------
 
 def generate_transform(transform_list=[]):
     if len(transform_list):
         output = io.StringIO()
         for type, value in transform_list:
-            if type == 'scale' and (value == (1.0,) or value == (1.0, 1.0)):
-                continue
-            if type == 'translate' and value == (0.0, 0.0):
-                continue
-            if type == 'rotate' and value == (0.0,):
+            if (type == 'scale' and (value == (1,) or value == (1, 1))
+                    or type == 'translate' and value == (0, 0)
+                    or type == 'rotate' and value == (0,)):
                 continue
             if type == 'matrix' and isinstance(value, Affine2DBase):
                 value = value.to_values()
-
             output.write('%s(%s)' % (
                 type, ' '.join(short_float_fmt(x) for x in value)))
         return output.getvalue()
     return ''
 
+
 def generate_css(attrib={}):
     if attrib:
         output = io.StringIO()
-        attrib = sorted(six.iteritems(attrib))
+        attrib = sorted(attrib.items())
         for k, v in attrib:
             k = escape_attrib(k)
             v = escape_attrib(v)
@@ -256,16 +267,16 @@ def generate_css(attrib={}):
         return output.getvalue()
     return ''
 
-_capstyle_d = {'projecting' : 'square', 'butt' : 'butt', 'round': 'round',}
-class RendererSVG(RendererBase):
-    FONT_SCALE = 100.0
-    fontd = maxdict(50)
 
+_capstyle_d = {'projecting': 'square', 'butt': 'butt', 'round': 'round'}
+
+
+class RendererSVG(RendererBase):
     def __init__(self, width, height, svgwriter, basename=None, image_dpi=72):
         self.width = width
         self.height = height
         self.writer = XMLWriter(svgwriter)
-        self.image_dpi = image_dpi  # the actual dpi we want to rasterize stuff with
+        self.image_dpi = image_dpi  # actual dpi at which we rasterize stuff
 
         self._groupd = {}
         if not rcParams['svg.image_inline']:
@@ -285,12 +296,14 @@ class RendererSVG(RendererBase):
 
         RendererBase.__init__(self)
         self._glyph_map = dict()
-
+        str_height = short_float_fmt(height)
+        str_width = short_float_fmt(width)
         svgwriter.write(svgProlog)
         self._start_id = self.writer.start(
             'svg',
-            width='%ipt' % width, height='%ipt' % height,
-            viewBox='0 0 %i %i' % (width, height),
+            width='%spt' % str_width,
+            height='%spt' % str_height,
+            viewBox='0 0 %s %s' % (str_width, str_height),
             xmlns="http://www.w3.org/2000/svg",
             version="1.1",
             attrib={'xmlns:xlink': "http://www.w3.org/1999/xlink"})
@@ -315,17 +328,12 @@ class RendererSVG(RendererBase):
         writer.end('defs')
 
     def _make_id(self, type, content):
-        content = str(content)
-        if rcParams['svg.hashsalt'] is None:
+        salt = rcParams['svg.hashsalt']
+        if salt is None:
             salt = str(uuid.uuid4())
-        else:
-            salt = rcParams['svg.hashsalt']
-        if six.PY3:
-            content = content.encode('utf8')
-            salt = salt.encode('utf8')
-        m = md5()
-        m.update(salt)
-        m.update(content)
+        m = hashlib.md5()
+        m.update(salt.encode('utf8'))
+        m.update(str(content).encode('utf8'))
         return '%s%s' % (type, m.hexdigest()[:10])
 
     def _make_flip_transform(self, transform):
@@ -366,16 +374,17 @@ class RendererSVG(RendererBase):
         HATCH_SIZE = 72
         writer = self.writer
         writer.start('defs')
-        for ((path, face, stroke), oid) in six.itervalues(self._hatchd):
+        for (path, face, stroke), oid in self._hatchd.values():
             writer.start(
                 'pattern',
                 id=oid,
                 patternUnits="userSpaceOnUse",
-                x="0", y="0", width=six.text_type(HATCH_SIZE),
-                height=six.text_type(HATCH_SIZE))
+                x="0", y="0", width=str(HATCH_SIZE),
+                height=str(HATCH_SIZE))
             path_data = self._convert_path(
                 path,
-                Affine2D().scale(HATCH_SIZE).scale(1.0, -1.0).translate(0, HATCH_SIZE),
+                Affine2D()
+                .scale(HATCH_SIZE).scale(1.0, -1.0).translate(0, HATCH_SIZE),
                 simplify=False)
             if face is None:
                 fill = 'none'
@@ -383,8 +392,8 @@ class RendererSVG(RendererBase):
                 fill = rgb2hex(face)
             writer.element(
                 'rect',
-                x="0", y="0", width=six.text_type(HATCH_SIZE+1),
-                height=six.text_type(HATCH_SIZE+1),
+                x="0", y="0", width=str(HATCH_SIZE+1),
+                height=str(HATCH_SIZE+1),
                 fill=fill)
             writer.element(
                 'path',
@@ -392,7 +401,7 @@ class RendererSVG(RendererBase):
                 style=generate_css({
                     'fill': rgb2hex(stroke),
                     'stroke': rgb2hex(stroke),
-                    'stroke-width': six.text_type(rcParams['hatch.linewidth']),
+                    'stroke-width': str(rcParams['hatch.linewidth']),
                     'stroke-linecap': 'butt',
                     'stroke-linejoin': 'miter'
                     })
@@ -411,7 +420,8 @@ class RendererSVG(RendererBase):
 
         if gc.get_hatch() is not None:
             attrib['fill'] = "url(#%s)" % self._get_hatch(gc, rgbFace)
-            if rgbFace is not None and len(rgbFace) == 4 and rgbFace[3] != 1.0 and not forced_alpha:
+            if (rgbFace is not None and len(rgbFace) == 4 and rgbFace[3] != 1.0
+                    and not forced_alpha):
                 attrib['fill-opacity'] = short_float_fmt(rgbFace[3])
         else:
             if rgbFace is None:
@@ -419,7 +429,8 @@ class RendererSVG(RendererBase):
             else:
                 if tuple(rgbFace[:3]) != (0, 0, 0):
                     attrib['fill'] = rgb2hex(rgbFace)
-                if len(rgbFace) == 4 and rgbFace[3] != 1.0 and not forced_alpha:
+                if (len(rgbFace) == 4 and rgbFace[3] != 1.0
+                        and not forced_alpha):
                     attrib['fill-opacity'] = short_float_fmt(rgbFace[3])
 
         if forced_alpha and gc.get_alpha() != 1.0:
@@ -427,7 +438,8 @@ class RendererSVG(RendererBase):
 
         offset, seq = gc.get_dashes()
         if seq is not None:
-            attrib['stroke-dasharray'] = ','.join([short_float_fmt(val) for val in seq])
+            attrib['stroke-dasharray'] = ','.join(
+                short_float_fmt(val) for val in seq)
             attrib['stroke-dashoffset'] = short_float_fmt(float(offset))
 
         linewidth = gc.get_linewidth()
@@ -477,11 +489,12 @@ class RendererSVG(RendererBase):
             return
         writer = self.writer
         writer.start('defs')
-        for clip, oid in six.itervalues(self._clipd):
+        for clip, oid in self._clipd.values():
             writer.start('clipPath', id=oid)
             if len(clip) == 2:
                 clippath, clippath_trans = clip
-                path_data = self._convert_path(clippath, clippath_trans, simplify=False)
+                path_data = self._convert_path(
+                    clippath, clippath_trans, simplify=False)
                 writer.element('path', d=path_data)
             else:
                 x, y, w, h = clip
@@ -500,11 +513,11 @@ class RendererSVG(RendererBase):
 
         writer = self.writer
         writer.start('defs')
-        for font_fname, chars in six.iteritems(self._fonts):
+        for font_fname, chars in self._fonts.items():
             font = get_font(font_fname)
             font.set_size(72, 72)
             sfnt = font.get_sfnt()
-            writer.start('font', id=sfnt[(1, 0, 0, 4)])
+            writer.start('font', id=sfnt[1, 0, 0, 4].decode("mac_roman"))
             writer.element(
                 'font-face',
                 attrib={
@@ -524,7 +537,7 @@ class RendererSVG(RendererBase):
                     d=path_data,
                     attrib={
                         # 'glyph-name': name,
-                        'unicode': unichr(char),
+                        'unicode': chr(char),
                         'horiz-adv-x':
                         short_float_fmt(glyph.linearHoriAdvance / 65536.0)})
             writer.end('font')
@@ -582,7 +595,8 @@ class RendererSVG(RendererBase):
         if gc.get_url() is not None:
             self.writer.end('a')
 
-    def draw_markers(self, gc, marker_path, marker_trans, path, trans, rgbFace=None):
+    def draw_markers(
+            self, gc, marker_path, marker_trans, path, trans, rgbFace=None):
         if not len(path.vertices):
             return
 
@@ -594,7 +608,7 @@ class RendererSVG(RendererBase):
         style = self._get_style_dict(gc, rgbFace)
         dictkey = (path_data, generate_css(style))
         oid = self._markers.get(dictkey)
-        style = generate_css({k: v for k, v in six.iteritems(style)
+        style = generate_css({k: v for k, v in style.items()
                               if k.startswith('stroke')})
 
         if oid is None:
@@ -648,19 +662,19 @@ class RendererSVG(RendererBase):
         path_codes = []
         writer.start('defs')
         for i, (path, transform) in enumerate(self._iter_collection_raw_paths(
-            master_transform, paths, all_transforms)):
+                master_transform, paths, all_transforms)):
             transform = Affine2D(transform.get_matrix()).scale(1.0, -1.0)
             d = self._convert_path(path, transform, simplify=False)
-            oid = 'C%x_%x_%s' % (self._path_collection_id, i,
-                                  self._make_id('', d))
+            oid = 'C%x_%x_%s' % (
+                self._path_collection_id, i, self._make_id('', d))
             writer.element('path', id=oid, d=d)
             path_codes.append(oid)
         writer.end('defs')
 
         for xo, yo, path_id, gc0, rgbFace in self._iter_collection(
-            gc, master_transform, all_transforms, path_codes, offsets,
-            offsetTrans, facecolors, edgecolors, linewidths, linestyles,
-            antialiaseds, urls, offset_position):
+                gc, master_transform, all_transforms, path_codes, offsets,
+                offsetTrans, facecolors, edgecolors, linewidths, linestyles,
+                antialiaseds, urls, offset_position):
             clipid = self._get_clip(gc0)
             url = gc0.get_url()
             if url is not None:
@@ -706,6 +720,16 @@ class RendererSVG(RendererBase):
                 operator='arithmetic',
                 k2="1", k3="1")
             writer.end('filter')
+            # feColorMatrix filter to correct opacity
+            writer.start(
+                'filter',
+                id='colorMat')
+            writer.element(
+                'feColorMatrix',
+                attrib={'type': 'matrix'},
+                values='1 0 0 0 0 \n0 1 0 0 0 \n0 0 1 0 0' +
+                       ' \n1 1 1 1 0 \n0 0 0 0 1 ')
+            writer.end('filter')
 
         avg_color = np.sum(colors[:, :], axis=0) / 3.0
         # Just skip fully-transparent triangles
@@ -739,41 +763,64 @@ class RendererSVG(RendererBase):
             writer.start(
                 'linearGradient',
                 id="GR%x_%d" % (self._n_gradients, i),
+                gradientUnits="userSpaceOnUse",
                 x1=short_float_fmt(x1), y1=short_float_fmt(y1),
                 x2=short_float_fmt(xb), y2=short_float_fmt(yb))
             writer.element(
                 'stop',
-                offset='0',
-                style=generate_css({'stop-color': rgb2hex(c),
+                offset='1',
+                style=generate_css({'stop-color': rgb2hex(avg_color),
                                     'stop-opacity': short_float_fmt(c[-1])}))
             writer.element(
                 'stop',
-                offset='1',
+                offset='0',
                 style=generate_css({'stop-color': rgb2hex(c),
                                     'stop-opacity': "0"}))
+
             writer.end('linearGradient')
 
-        writer.element(
-            'polygon',
-            id='GT%x' % self._n_gradients,
-            points=" ".join([short_float_fmt(x)
-                             for x in (x1, y1, x2, y2, x3, y3)]))
         writer.end('defs')
 
-        avg_color = np.sum(colors[:, :], axis=0) / 3.0
-        href = '#GT%x' % self._n_gradients
+        # triangle formation using "path"
+        dpath = "M " + short_float_fmt(x1)+',' + short_float_fmt(y1)
+        dpath += " L " + short_float_fmt(x2) + ',' + short_float_fmt(y2)
+        dpath += " " + short_float_fmt(x3) + ',' + short_float_fmt(y3) + " Z"
+
         writer.element(
-            'use',
-            attrib={'xlink:href': href,
+            'path',
+            attrib={'d': dpath,
                     'fill': rgb2hex(avg_color),
-                    'fill-opacity': short_float_fmt(avg_color[-1])})
-        for i in range(3):
-            writer.element(
-                'use',
-                attrib={'xlink:href': href,
-                        'fill': 'url(#GR%x_%d)' % (self._n_gradients, i),
-                        'fill-opacity': '1',
-                        'filter': 'url(#colorAdd)'})
+                    'fill-opacity': '1',
+                    'shape-rendering': "crispEdges"})
+
+        writer.start(
+                'g',
+                attrib={'stroke': "none",
+                        'stroke-width': "0",
+                        'shape-rendering': "crispEdges",
+                        'filter': "url(#colorMat)"})
+
+        writer.element(
+            'path',
+            attrib={'d': dpath,
+                    'fill': 'url(#GR%x_0)' % self._n_gradients,
+                    'shape-rendering': "crispEdges"})
+
+        writer.element(
+            'path',
+            attrib={'d': dpath,
+                    'fill': 'url(#GR%x_1)' % self._n_gradients,
+                    'filter': 'url(#colorAdd)',
+                    'shape-rendering': "crispEdges"})
+
+        writer.element(
+            'path',
+            attrib={'d': dpath,
+                    'fill': 'url(#GR%x_2)' % self._n_gradients,
+                    'filter': 'url(#colorAdd)',
+                    'shape-rendering': "crispEdges"})
+
+        writer.end('g')
 
         self._n_gradients += 1
 
@@ -824,9 +871,11 @@ class RendererSVG(RendererBase):
                 "data:image/png;base64,\n" +
                 base64.b64encode(bytesio.getvalue()).decode('ascii'))
         else:
-            self._imaged[self.basename] = self._imaged.get(self.basename, 0) + 1
-            filename = '%s.image%d.png'%(self.basename, self._imaged[self.basename])
-            verbose.report('Writing image file for inclusion: %s' % filename)
+            self._imaged[self.basename] = (
+                self._imaged.get(self.basename, 0) + 1)
+            filename = '%s.image%d.png' % (
+                self.basename, self._imaged[self.basename])
+            _log.info('Writing image file for inclusion: %s', filename)
             _png.write_png(im, filename)
             oid = oid or 'Im_' + self._make_id('image', filename)
             attrib['xlink:href'] = filename
@@ -896,7 +945,7 @@ class RendererSVG(RendererBase):
 
         writer.comment(s)
 
-        glyph_map=self._glyph_map
+        glyph_map = self._glyph_map
 
         text2path = self._text2path
         color = rgb2hex(gc.get_rgb())
@@ -905,8 +954,10 @@ class RendererSVG(RendererBase):
         style = {}
         if color != '#000000':
             style['fill'] = color
-        if gc.get_alpha() != 1.0:
-            style['opacity'] = short_float_fmt(gc.get_alpha())
+
+        alpha = gc.get_alpha() if gc.get_forced_alpha() else gc.get_rgb()[3]
+        if alpha != 1:
+            style['opacity'] = short_float_fmt(alpha)
 
         if not ismath:
             font = text2path._get_font(prop)
@@ -916,7 +967,7 @@ class RendererSVG(RendererBase):
 
             if glyph_map_new:
                 writer.start('defs')
-                for char_id, glyph_path in six.iteritems(glyph_map_new):
+                for char_id, glyph_path in glyph_map_new.items():
                     path = Path(*glyph_path)
                     path_data = self._convert_path(path, simplify=False)
                     writer.element('path', id=char_id, d=path_data)
@@ -934,7 +985,7 @@ class RendererSVG(RendererBase):
 
             writer.start('g', attrib=attrib)
             for glyph_id, xposition, yposition, scale in glyph_info:
-                attrib={'xlink:href': '#%s' % glyph_id}
+                attrib = {'xlink:href': '#%s' % glyph_id}
                 if xposition != 0.0:
                     attrib['x'] = short_float_fmt(xposition)
                 if yposition != 0.0:
@@ -946,11 +997,11 @@ class RendererSVG(RendererBase):
             writer.end('g')
         else:
             if ismath == "TeX":
-                _glyphs = text2path.get_glyphs_tex(prop, s, glyph_map=glyph_map,
-                                                   return_new_glyphs_only=True)
+                _glyphs = text2path.get_glyphs_tex(
+                    prop, s, glyph_map=glyph_map, return_new_glyphs_only=True)
             else:
-                _glyphs = text2path.get_glyphs_mathtext(prop, s, glyph_map=glyph_map,
-                                                        return_new_glyphs_only=True)
+                _glyphs = text2path.get_glyphs_mathtext(
+                    prop, s, glyph_map=glyph_map, return_new_glyphs_only=True)
 
             glyph_info, glyph_map_new, rects = _glyphs
 
@@ -959,7 +1010,7 @@ class RendererSVG(RendererBase):
             # used.
             if glyph_map_new:
                 writer.start('defs')
-                for char_id, glyph_path in six.iteritems(glyph_map_new):
+                for char_id, glyph_path in glyph_map_new.items():
                     char_id = self._adjust_char_id(char_id)
                     # Some characters are blank
                     if not len(glyph_path[0]):
@@ -1006,8 +1057,10 @@ class RendererSVG(RendererBase):
         style = {}
         if color != '#000000':
             style['fill'] = color
-        if gc.get_alpha() != 1.0:
-            style['opacity'] = short_float_fmt(gc.get_alpha())
+
+        alpha = gc.get_alpha() if gc.get_forced_alpha() else gc.get_rgb()[3]
+        if alpha != 1:
+            style['opacity'] = short_float_fmt(alpha)
 
         if not ismath:
             font = self._get_font(prop)
@@ -1021,9 +1074,9 @@ class RendererSVG(RendererBase):
             attrib = {}
             # Must add "px" to workaround a Firefox bug
             style['font-size'] = short_float_fmt(fontsize) + 'px'
-            style['font-family'] = six.text_type(fontfamily)
+            style['font-family'] = str(fontfamily)
             style['font-style'] = prop.get_style().lower()
-            style['font-weight'] = six.text_type(prop.get_weight()).lower()
+            style['font-weight'] = str(prop.get_weight()).lower()
             attrib['style'] = generate_css(style)
 
             if mtext and (angle == 0 or mtext.get_rotation_mode() == "anchor"):
@@ -1071,7 +1124,7 @@ class RendererSVG(RendererBase):
             writer.comment(s)
 
             width, height, descent, svg_elements, used_characters = \
-                   self.mathtext_parser.parse(s, 72, prop)
+                self.mathtext_parser.parse(s, 72, prop)
             svg_glyphs = svg_elements.svg_glyphs
             svg_rects = svg_elements.svg_rects
 
@@ -1081,15 +1134,13 @@ class RendererSVG(RendererBase):
                 ('translate', (x, y)),
                 ('rotate', (-angle,))])
 
-            # Apply attributes to 'g', not 'text', because we likely
-            # have some rectangles as well with the same style and
-            # transformation
+            # Apply attributes to 'g', not 'text', because we likely have some
+            # rectangles as well with the same style and transformation.
             writer.start('g', attrib=attrib)
 
             writer.start('text')
 
-            # Sort the characters by font, and output one tspan for
-            # each
+            # Sort the characters by font, and output one tspan for each.
             spans = OrderedDict()
             for font, fontsize, thetext, new_x, new_y, metrics in svg_glyphs:
                 style = generate_css({
@@ -1098,28 +1149,29 @@ class RendererSVG(RendererBase):
                     'font-style': font.style_name.lower(),
                     'font-weight': font.style_name.lower()})
                 if thetext == 32:
-                    thetext = 0xa0 # non-breaking space
+                    thetext = 0xa0  # non-breaking space
                 spans.setdefault(style, []).append((new_x, -new_y, thetext))
 
             if rcParams['svg.fonttype'] == 'svgfont':
-                for font, fontsize, thetext, new_x, new_y, metrics in svg_glyphs:
+                for font, fontsize, thetext, new_x, new_y, metrics \
+                        in svg_glyphs:
                     fontset = self._fonts.setdefault(font.fname, set())
                     fontset.add(thetext)
 
-            for style, chars in six.iteritems(spans):
+            for style, chars in spans.items():
                 chars.sort()
 
                 same_y = True
                 if len(chars) > 1:
                     last_y = chars[0][1]
-                    for i in xrange(1, len(chars)):
+                    for i in range(1, len(chars)):
                         if chars[i][1] != last_y:
                             same_y = False
                             break
                 if same_y:
-                    ys = six.text_type(chars[0][1])
+                    ys = str(chars[0][1])
                 else:
-                    ys = ' '.join(six.text_type(c[1]) for c in chars)
+                    ys = ' '.join(str(c[1]) for c in chars)
 
                 attrib = {
                     'style': style,
@@ -1129,7 +1181,7 @@ class RendererSVG(RendererBase):
 
                 writer.element(
                     'tspan',
-                    ''.join(unichr(c[2]) for c in chars),
+                    ''.join(chr(c[2]) for c in chars),
                     attrib=attrib)
 
             writer.end('text')
@@ -1188,62 +1240,42 @@ class FigureCanvasSVG(FigureCanvasBase):
     fixed_dpi = 72
 
     def print_svg(self, filename, *args, **kwargs):
-        if isinstance(filename, six.string_types):
-            with io.open(filename, 'w', encoding='utf-8') as svgwriter:
-                return self._print_svg(filename, svgwriter, **kwargs)
+        with cbook.open_file_cm(filename, "w", encoding="utf-8") as fh:
 
-        if not is_writable_file_like(filename):
-            raise ValueError("filename must be a path or a file-like object")
+            filename = getattr(fh, 'name', '')
+            if not isinstance(filename, str):
+                filename = ''
 
-        svgwriter = filename
-        filename = getattr(svgwriter, 'name', '')
-        if not isinstance(filename, six.string_types):
-            filename = ''
-
-        if not isinstance(svgwriter, io.TextIOBase):
-            if six.PY3:
-                svgwriter = io.TextIOWrapper(svgwriter, 'utf-8')
+            if cbook.file_requires_unicode(fh):
+                detach = False
             else:
-                svgwriter = codecs.getwriter('utf-8')(svgwriter)
-            detach = True
-        else:
-            detach = False
+                fh = io.TextIOWrapper(fh, 'utf-8')
+                detach = True
 
-        result = self._print_svg(filename, svgwriter, **kwargs)
+            result = self._print_svg(filename, fh, **kwargs)
 
-        # Detach underlying stream from wrapper so that it remains open in the
-        # caller.
-        if detach:
-            if six.PY3:
-                svgwriter.detach()
-            else:
-                svgwriter.reset()
-                svgwriter.stream = io.BytesIO()
+            # Detach underlying stream from wrapper so that it remains open in
+            # the caller.
+            if detach:
+                fh.detach()
 
         return result
 
     def print_svgz(self, filename, *args, **kwargs):
-        if isinstance(filename, six.string_types):
-            options = dict(filename=filename)
-        elif is_writable_file_like(filename):
-            options = dict(fileobj=filename)
-        else:
-            raise ValueError("filename must be a path or a file-like object")
-
-        with gzip.GzipFile(mode='w', **options) as gzipwriter:
+        with cbook.open_file_cm(filename, "wb") as fh, \
+                gzip.GzipFile(mode='w', fileobj=fh) as gzipwriter:
             return self.print_svg(gzipwriter)
 
-    def _print_svg(self, filename, svgwriter, **kwargs):
-        image_dpi = kwargs.pop("dpi", 72)
+    def _print_svg(
+            self, filename, fh, *, dpi=72, bbox_inches_restore=None, **kwargs):
         self.figure.set_dpi(72.0)
         width, height = self.figure.get_size_inches()
-        w, h = width*72, height*72
+        w, h = width * 72, height * 72
 
-        _bbox_inches_restore = kwargs.pop("bbox_inches_restore", None)
         renderer = MixedModeRenderer(
-            self.figure,
-            width, height, image_dpi, RendererSVG(w, h, svgwriter, filename, image_dpi),
-            bbox_inches_restore=_bbox_inches_restore)
+            self.figure, width, height, dpi,
+            RendererSVG(w, h, fh, filename, dpi),
+            bbox_inches_restore=bbox_inches_restore)
 
         self.figure.draw(renderer)
         renderer.finalize()
@@ -1251,19 +1283,18 @@ class FigureCanvasSVG(FigureCanvasBase):
     def get_default_filetype(self):
         return 'svg'
 
-class FigureManagerSVG(FigureManagerBase):
-    pass
+
+FigureManagerSVG = FigureManagerBase
 
 
 svgProlog = """\
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Created with matplotlib (http://matplotlib.org/) -->
+<!-- Created with matplotlib (https://matplotlib.org/) -->
 """
 
 
 @_Backend.export
 class _BackendSVG(_Backend):
     FigureCanvas = FigureCanvasSVG
-    FigureManager = FigureManagerSVG

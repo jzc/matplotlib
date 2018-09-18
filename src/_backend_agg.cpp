@@ -101,7 +101,7 @@ BufferRegion *RendererAgg::copy_from_bbox(agg::rect_d in_rect)
 void RendererAgg::restore_region(BufferRegion &region)
 {
     if (region.get_data() == NULL) {
-        throw "Cannot restore_region from NULL data";
+        throw std::runtime_error("Cannot restore_region from NULL data");
     }
 
     agg::rendering_buffer rbuf;
@@ -115,7 +115,7 @@ void
 RendererAgg::restore_region(BufferRegion &region, int xx1, int yy1, int xx2, int yy2, int x, int y )
 {
     if (region.get_data() == NULL) {
-        throw "Cannot restore_region from NULL data";
+        throw std::runtime_error("Cannot restore_region from NULL data");
     }
 
     agg::rect_i &rrect = region.get_rect();
@@ -179,18 +179,6 @@ void RendererAgg::tostring_argb(uint8_t *buf)
     agg::color_conv(&renderingBufferTmp, &renderingBuffer, agg::color_conv_rgba32_to_argb32());
 }
 
-void RendererAgg::tostring_bgra(uint8_t *buf)
-{
-    //"Return the rendered buffer as an RGB string";
-
-    int row_len = width * 4;
-
-    agg::rendering_buffer renderingBufferTmp;
-    renderingBufferTmp.attach(buf, width, height, row_len);
-
-    agg::color_conv(&renderingBufferTmp, &renderingBuffer, agg::color_conv_rgba32_to_bgra32());
-}
-
 agg::rect_i RendererAgg::get_content_extents()
 {
     agg::rect_i r(width, height, 0, 0);
@@ -213,10 +201,15 @@ agg::rect_i RendererAgg::get_content_extents()
         }
     }
 
-    r.x1 = std::max(0, r.x1);
-    r.y1 = std::max(0, r.y1);
-    r.x2 = std::min(r.x2 + 1, (int)width);
-    r.y2 = std::min(r.y2 + 1, (int)height);
+    if (r.x1 == width && r.x2 == 0) {
+      // The buffer is completely empty.
+      r.x1 = r.y1 = r.x2 = r.y2 = 0;
+    } else {
+      r.x1 = std::max(0, r.x1);
+      r.y1 = std::max(0, r.y1);
+      r.x2 = std::min(r.x2 + 1, (int)width);
+      r.y2 = std::min(r.y2 + 1, (int)height);
+    }
 
     return r;
 }

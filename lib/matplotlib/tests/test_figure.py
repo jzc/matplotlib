@@ -1,15 +1,58 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+import sys
+import warnings
+import platform
 
 from matplotlib import rcParams
-from matplotlib.testing.decorators import image_comparison
+from matplotlib.testing.decorators import image_comparison, check_figures_equal
 from matplotlib.axes import Axes
 from matplotlib.ticker import AutoMinorLocator, FixedFormatter
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.gridspec as gridspec
 import numpy as np
-import warnings
 import pytest
+
+
+@image_comparison(baseline_images=['figure_align_labels'],
+                  tol={'aarch64': 0.02}.get(platform.machine(), 0.0))
+def test_align_labels():
+    # Check the figure.align_labels() command
+    fig = plt.figure(tight_layout=True)
+    gs = gridspec.GridSpec(3, 3)
+
+    ax = fig.add_subplot(gs[0, :2])
+    ax.plot(np.arange(0, 1e6, 1000))
+    ax.set_ylabel('Ylabel0 0')
+    ax = fig.add_subplot(gs[0, -1])
+    ax.plot(np.arange(0, 1e4, 100))
+
+    for i in range(3):
+        ax = fig.add_subplot(gs[1, i])
+        ax.set_ylabel('YLabel1 %d' % i)
+        ax.set_xlabel('XLabel1 %d' % i)
+        if i in [0, 2]:
+            ax.xaxis.set_label_position("top")
+            ax.xaxis.tick_top()
+        if i == 0:
+            for tick in ax.get_xticklabels():
+                tick.set_rotation(90)
+        if i == 2:
+            ax.yaxis.set_label_position("right")
+            ax.yaxis.tick_right()
+
+    for i in range(3):
+        ax = fig.add_subplot(gs[2, i])
+        ax.set_xlabel('XLabel2 %d' % (i))
+        ax.set_ylabel('YLabel2 %d' % (i))
+
+        if i == 2:
+            ax.plot(np.arange(0, 1e4, 10))
+            ax.yaxis.set_label_position("right")
+            ax.yaxis.tick_right()
+            for tick in ax.get_xticklabels():
+                tick.set_rotation(90)
+
+    fig.align_labels()
 
 
 def test_figure_label():
@@ -90,7 +133,7 @@ def test_figure_legend():
     axes[0].plot([0, 1], [0, 1], label='y', color='r')
     axes[0].plot([0, 1], [0.5, 0.5], label='y', color='k')
 
-    axes[1].plot([0, 1], [1, 0], label='y', color='r')
+    axes[1].plot([0, 1], [1, 0], label='_y', color='r')
     axes[1].plot([0, 1], [0, 1], label='z', color='b')
     fig.legend()
 
@@ -172,7 +215,7 @@ def test_iterability_axes_argument():
 
     # This is a regression test for matplotlib/matplotlib#3196. If one of the
     # arguments returned by _as_mpl_axes defines __getitem__ but is not
-    # iterable, this would raise an execption. This is because we check
+    # iterable, this would raise an exception. This is because we check
     # whether the arguments are iterable, and if so we try and convert them
     # to a tuple. However, the ``iterable`` function returns True if
     # __getitem__ is present, but some classes can define __getitem__ without
@@ -180,8 +223,7 @@ def test_iterability_axes_argument():
     # case it fails.
 
     class MyAxes(Axes):
-        def __init__(self, *args, **kwargs):
-            kwargs.pop('myclass', None)
+        def __init__(self, *args, myclass=None, **kwargs):
             return Axes.__init__(self, *args, **kwargs)
 
     class MyClass(object):
@@ -322,7 +364,86 @@ def test_subplots_shareax_loglabels():
 
 
 def test_savefig():
-    fig, ax = plt.subplots()
+    fig = plt.figure()
     msg = "savefig() takes 2 positional arguments but 3 were given"
     with pytest.raises(TypeError, message=msg):
         fig.savefig("fname1.png", "fname2.png")
+
+
+def test_figure_repr():
+    fig = plt.figure(figsize=(10, 20), dpi=10)
+    assert repr(fig) == "<Figure size 100x200 with 0 Axes>"
+
+
+def test_warn_cl_plus_tl():
+    fig, ax = plt.subplots(constrained_layout=True)
+    with pytest.warns(UserWarning):
+        # this should warn,
+        fig.subplots_adjust(top=0.8)
+    assert not(fig.get_constrained_layout())
+
+
+@check_figures_equal(extensions=["png", "pdf"])
+def test_add_artist(fig_test, fig_ref):
+    fig_test.set_dpi(100)
+    fig_ref.set_dpi(100)
+
+    ax = fig_test.subplots()
+    l1 = plt.Line2D([.2, .7], [.7, .7], gid='l1')
+    l2 = plt.Line2D([.2, .7], [.8, .8], gid='l2')
+    r1 = plt.Circle((20, 20), 100, transform=None, gid='C1')
+    r2 = plt.Circle((.7, .5), .05, gid='C2')
+    r3 = plt.Circle((4.5, .8), .55, transform=fig_test.dpi_scale_trans,
+                    facecolor='crimson', gid='C3')
+    for a in [l1, l2, r1, r2, r3]:
+        fig_test.add_artist(a)
+    l2.remove()
+
+    ax2 = fig_ref.subplots()
+    l1 = plt.Line2D([.2, .7], [.7, .7], transform=fig_ref.transFigure,
+                    gid='l1', zorder=21)
+    r1 = plt.Circle((20, 20), 100, transform=None, clip_on=False, zorder=20,
+                    gid='C1')
+    r2 = plt.Circle((.7, .5), .05, transform=fig_ref.transFigure, gid='C2',
+                    zorder=20)
+    r3 = plt.Circle((4.5, .8), .55, transform=fig_ref.dpi_scale_trans,
+                    facecolor='crimson', clip_on=False, zorder=20, gid='C3')
+    for a in [l1, r1, r2, r3]:
+        ax2.add_artist(a)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 6), reason="requires Python 3.6+")
+@pytest.mark.parametrize("fmt", ["png", "pdf", "ps", "eps", "svg"])
+def test_fspath(fmt, tmpdir):
+    from pathlib import Path
+    out = Path(tmpdir, "test.{}".format(fmt))
+    plt.savefig(out)
+    with out.open("rb") as file:
+        # All the supported formats include the format name (case-insensitive)
+        # in the first 100 bytes.
+        assert fmt.encode("ascii") in file.read(100).lower()
+
+
+def test_tightbbox():
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, 1)
+    t = ax.text(1., 0.5, 'This dangles over end')
+    renderer = fig.canvas.get_renderer()
+    x1Nom0 = 9.035  # inches
+    assert np.abs(t.get_tightbbox(renderer).x1 - x1Nom0 * fig.dpi) < 2
+    assert np.abs(ax.get_tightbbox(renderer).x1 - x1Nom0 * fig.dpi) < 2
+    assert np.abs(fig.get_tightbbox(renderer).x1 - x1Nom0) < 0.05
+    assert np.abs(fig.get_tightbbox(renderer).x0 - 0.679) < 0.05
+    # now exclude t from the tight bbox so now the bbox is quite a bit
+    # smaller
+    t.set_in_layout(False)
+    x1Nom = 7.333
+    assert np.abs(ax.get_tightbbox(renderer).x1 - x1Nom * fig.dpi) < 2
+    assert np.abs(fig.get_tightbbox(renderer).x1 - x1Nom) < 0.05
+
+    t.set_in_layout(True)
+    x1Nom = 7.333
+    assert np.abs(ax.get_tightbbox(renderer).x1 - x1Nom0 * fig.dpi) < 2
+    # test bbox_extra_artists method...
+    assert np.abs(ax.get_tightbbox(renderer,
+                        bbox_extra_artists=[]).x1 - x1Nom * fig.dpi) < 2

@@ -10,26 +10,19 @@ Displays Agg images in the browser, with interactivity
 # - `backend_webagg.py` contains a concrete implementation of a basic
 #   application, implemented with tornado.
 
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-
-import io
+import datetime
+from io import StringIO
 import json
 import os
-import time
+from pathlib import Path
 import warnings
 
 import numpy as np
 import tornado
-import datetime
 
 from matplotlib.backends import backend_agg
 from matplotlib.backend_bases import _Backend
-from matplotlib.figure import Figure
-from matplotlib import backend_bases
-from matplotlib import _png
+from matplotlib import backend_bases, _png
 
 
 # http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
@@ -96,21 +89,21 @@ def _handle_key(key):
     code = int(key[key.index('k') + 1:])
     value = chr(code)
     # letter keys
-    if code >= 65 and code <= 90:
+    if 65 <= code <= 90:
         if 'shift+' in key:
             key = key.replace('shift+', '')
         else:
             value = value.lower()
     # number keys
-    elif code >= 48 and code <= 57:
+    elif 48 <= code <= 57:
         if 'shift+' in key:
             value = ')!@#$%^&*('[int(value)]
             key = key.replace('shift+', '')
     # function keys
-    elif code >= 112 and code <= 123:
+    elif 112 <= code <= 123:
         value = 'f%s' % (code - 111)
     # number pad keys
-    elif code >= 96 and code <= 105:
+    elif 96 <= code <= 105:
         value = '%s' % (code - 96)
     # keys with shift alternatives
     elif code in _SHIFT_LUT and 'shift+' in key:
@@ -152,17 +145,11 @@ class FigureCanvasWebAggCore(backend_agg.FigureCanvasAgg):
         show()
 
     def draw(self):
-        renderer = self.get_renderer(cleared=True)
-
         self._png_is_old = True
-
-        backend_agg.RendererAgg.lock.acquire()
         try:
-            self.figure.draw(renderer)
+            super().draw()
         finally:
-            backend_agg.RendererAgg.lock.release()
-            # Swap the frames
-            self.manager.refresh_all()
+            self.manager.refresh_all()  # Swap the frames.
 
     def draw_idle(self):
         self.send_event("draw")
@@ -255,7 +242,7 @@ class FigureCanvasWebAggCore(backend_agg.FigureCanvasAgg):
 
     def handle_unknown_event(self, event):
         warnings.warn('Unhandled message type {0}. {1}'.format(
-            event['type'], event))
+            event['type'], event), stacklevel=2)
 
     def handle_ack(self, event):
         # Network latency tends to decrease if traffic is flowing
@@ -358,17 +345,6 @@ class FigureCanvasWebAggCore(backend_agg.FigureCanvasAgg):
 
     def send_event(self, event_type, **kwargs):
         self.manager._send_event(event_type, **kwargs)
-
-    def start_event_loop(self, timeout):
-        backend_bases.FigureCanvasBase.start_event_loop_default(
-            self, timeout)
-    start_event_loop.__doc__ = \
-        backend_bases.FigureCanvasBase.start_event_loop_default.__doc__
-
-    def stop_event_loop(self):
-        backend_bases.FigureCanvasBase.stop_event_loop_default(self)
-    stop_event_loop.__doc__ = \
-        backend_bases.FigureCanvasBase.stop_event_loop_default.__doc__
 
 
 _JQUERY_ICON_CLASSES = {
@@ -473,15 +449,12 @@ class FigureManagerWebAgg(backend_bases.FigureManagerBase):
     @classmethod
     def get_javascript(cls, stream=None):
         if stream is None:
-            output = io.StringIO()
+            output = StringIO()
         else:
             output = stream
 
-        with io.open(os.path.join(
-                os.path.dirname(__file__),
-                "web_backend",
-                "mpl.js"), encoding='utf8') as fd:
-            output.write(fd.read())
+        output.write((Path(__file__).parent / "web_backend/js/mpl.js")
+                     .read_text(encoding="utf-8"))
 
         toolitems = []
         for name, tooltip, image, method in cls.ToolbarCls.toolitems:
@@ -512,8 +485,7 @@ class FigureManagerWebAgg(backend_bases.FigureManagerBase):
         return os.path.join(os.path.dirname(__file__), 'web_backend')
 
     def _send_event(self, event_type, **kwargs):
-        payload = {'type': event_type}
-        payload.update(kwargs)
+        payload = {'type': event_type, **kwargs}
         for s in self.web_sockets:
             s.send_json(payload)
 

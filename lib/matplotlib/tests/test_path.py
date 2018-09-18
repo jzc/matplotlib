@@ -1,5 +1,3 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
 import copy
 
 import numpy as np
@@ -12,6 +10,12 @@ from matplotlib.patches import Polygon
 from matplotlib.testing.decorators import image_comparison
 import matplotlib.pyplot as plt
 from matplotlib import transforms
+
+
+def test_empty_closed_path():
+    path = Path(np.zeros((0, 2)), closed=True)
+    assert path.vertices.shape == (0, 2)
+    assert path.codes is None
 
 
 def test_readonly_path():
@@ -87,13 +91,15 @@ def test_path_clipping():
             xy, facecolor='none', edgecolor='red', closed=True))
 
 
-@image_comparison(baseline_images=['semi_log_with_zero'], extensions=['png'])
+@image_comparison(baseline_images=['semi_log_with_zero'], extensions=['png'],
+                  style='mpl20')
 def test_log_transform_with_zero():
     x = np.arange(-10, 10)
     y = (1.0 - 1.0/(x**2+1))**20
 
     fig, ax = plt.subplots()
-    ax.semilogy(x, y, "-o", lw=15)
+    ax.semilogy(x, y, "-o", lw=15, markeredgecolor='k')
+    ax.set_ylim(1e-7, 1)
     ax.grid(True)
 
 
@@ -104,7 +110,8 @@ def test_make_compound_path_empty():
     assert r.vertices.shape == (0, 2)
 
 
-@image_comparison(baseline_images=['xkcd'], remove_text=True)
+@image_comparison(baseline_images=['xkcd'], extensions=['png'],
+                  remove_text=True)
 def test_xkcd():
     np.random.seed(0)
 
@@ -114,6 +121,23 @@ def test_xkcd():
     with plt.xkcd():
         fig, ax = plt.subplots()
         ax.plot(x, y)
+
+
+@image_comparison(baseline_images=['xkcd_marker'], extensions=['png'],
+                  remove_text=True)
+def test_xkcd_marker():
+    np.random.seed(0)
+
+    x = np.linspace(0, 5, 8)
+    y1 = x
+    y2 = 5 - x
+    y3 = 2.5 * np.ones(8)
+
+    with plt.xkcd():
+        fig, ax = plt.subplots()
+        ax.plot(x, y1, '+', ms=10)
+        ax.plot(x, y2, 'o', ms=10)
+        ax.plot(x, y3, '^', ms=10)
 
 
 @image_comparison(baseline_images=['marker_paths'], extensions=['pdf'],

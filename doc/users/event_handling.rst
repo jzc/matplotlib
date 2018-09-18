@@ -4,7 +4,7 @@
 Event handling and picking
 **************************
 
-matplotlib works with a number of user interface toolkits (wxpython,
+Matplotlib works with a number of user interface toolkits (wxpython,
 tkinter, qt4, gtk, and macosx) and in order to support features like
 interactive panning and zooming of figures, it is helpful to the
 developers to have an API for interacting with the figure via key
@@ -47,22 +47,24 @@ disconnect the callback, just call::
     fig.canvas.mpl_disconnect(cid)
 
 .. note::
-   The canvas retains only weak references to the callbacks.  Therefore
-   if a callback is a method of a class instance, you need to retain
-   a reference to that instance.  Otherwise the instance will be
-   garbage-collected and the callback will vanish.
+   The canvas retains only weak references to instance methods used as
+   callbacks.  Therefore, you need to retain a reference to instances owning
+   such methods.  Otherwise the instance will be garbage-collected and the
+   callback will vanish.
+
+   This does not affect free functions used as callbacks.
 
 
 Here are the events that you can connect to, the class instances that
-are sent back to you when the event occurs, and the event descriptions
+are sent back to you when the event occurs, and the event descriptions:
 
 
-=======================  ======================================================================================
+=======================  =============================================================================================
 Event name               Class and description
-=======================  ======================================================================================
+=======================  =============================================================================================
 'button_press_event'     :class:`~matplotlib.backend_bases.MouseEvent`     - mouse button is pressed
 'button_release_event'   :class:`~matplotlib.backend_bases.MouseEvent`     - mouse button is released
-'draw_event'             :class:`~matplotlib.backend_bases.DrawEvent`      - canvas draw
+'draw_event'             :class:`~matplotlib.backend_bases.DrawEvent`      - canvas draw (but before screen update)
 'key_press_event'        :class:`~matplotlib.backend_bases.KeyEvent`       - key is pressed
 'key_release_event'      :class:`~matplotlib.backend_bases.KeyEvent`       - key is released
 'motion_notify_event'    :class:`~matplotlib.backend_bases.MouseEvent`     - mouse motion
@@ -73,7 +75,7 @@ Event name               Class and description
 'figure_leave_event'     :class:`~matplotlib.backend_bases.LocationEvent`  - mouse leaves a figure
 'axes_enter_event'       :class:`~matplotlib.backend_bases.LocationEvent`  - mouse enters a new axes
 'axes_leave_event'       :class:`~matplotlib.backend_bases.LocationEvent`  - mouse leaves an axes
-=======================  ======================================================================================
+=======================  =============================================================================================
 
 .. _event-attributes:
 

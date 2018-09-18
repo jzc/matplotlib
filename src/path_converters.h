@@ -1,7 +1,7 @@
 /* -*- mode: c++; c-basic-offset: 4 -*- */
 
-#ifndef __PATH_CONVERTERS_H__
-#define __PATH_CONVERTERS_H__
+#ifndef MPL_PATH_CONVERTERS_H
+#define MPL_PATH_CONVERTERS_H
 
 #include <cmath>
 #include <stdint.h>
@@ -841,8 +841,8 @@ class PathSimplifier : protected EmbeddedQueue<9>
 
     bool m_moveto;
     bool m_after_moveto;
-    double m_lastx, m_lasty;
     bool m_clipped;
+    double m_lastx, m_lasty;
 
     double m_origdx;
     double m_origdy;
@@ -1008,4 +1008,4 @@ class Sketch
     RandomNumberGenerator m_rand;
 };
 
-#endif // __PATH_CONVERTERS_H__
+#endif // MPL_PATH_CONVERTERS_H

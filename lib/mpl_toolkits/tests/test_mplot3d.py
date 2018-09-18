@@ -18,7 +18,7 @@ def test_bar3d():
         ys = np.arange(20)
         cs = [c] * len(xs)
         cs[0] = 'c'
-        ax.bar(xs, ys, zs=z, zdir='y', color=cs, alpha=0.8)
+        ax.bar(xs, ys, zs=z, zdir='y', align='edge', color=cs, alpha=0.8)
 
 
 @image_comparison(
@@ -55,7 +55,8 @@ def test_bar3d_notshaded():
     fig.canvas.draw()
 
 
-@image_comparison(baseline_images=['contour3d'], remove_text=True)
+@image_comparison(baseline_images=['contour3d'],
+                  remove_text=True, style='mpl20')
 def test_contour3d():
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -94,6 +95,22 @@ def test_contourf3d_fill():
     ax.set_xlim(-2, 2)
     ax.set_ylim(-2, 2)
     ax.set_zlim(-1, 1)
+
+
+@image_comparison(baseline_images=['tricontour'], remove_text=True,
+                  style='mpl20', extensions=['png'])
+def test_tricontour():
+    fig = plt.figure()
+
+    np.random.seed(19680801)
+    x = np.random.rand(1000) - 0.5
+    y = np.random.rand(1000) - 0.5
+    z = -(x**2 + y**2)
+
+    ax = fig.add_subplot(1, 2, 1, projection='3d')
+    ax.tricontour(x, y, z)
+    ax = fig.add_subplot(1, 2, 2, projection='3d')
+    ax.tricontourf(x, y, z)
 
 
 @image_comparison(baseline_images=['lines3d'], remove_text=True)
@@ -159,6 +176,17 @@ def test_scatter3d_color():
                color='b', marker='s')
 
 
+@image_comparison(baseline_images=['plot_3d_from_2d'], remove_text=True,
+                  extensions=['png'])
+def test_plot_3d_from_2d():
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    xs = np.arange(0, 5)
+    ys = np.arange(5, 10)
+    ax.plot(xs, ys, zs=0, zdir='x')
+    ax.plot(xs, ys, zs=0, zdir='y')
+
+
 @image_comparison(baseline_images=['surface3d'], remove_text=True)
 def test_surface3d():
     fig = plt.figure()
@@ -172,6 +200,21 @@ def test_surface3d():
                            lw=0, antialiased=False)
     ax.set_zlim(-1.01, 1.01)
     fig.colorbar(surf, shrink=0.5, aspect=5)
+
+
+@image_comparison(baseline_images=['surface3d_shaded'], remove_text=True,
+                  extensions=['png'])
+def test_surface3d_shaded():
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    X = np.arange(-5, 5, 0.25)
+    Y = np.arange(-5, 5, 0.25)
+    X, Y = np.meshgrid(X, Y)
+    R = np.sqrt(X ** 2 + Y ** 2)
+    Z = np.sin(R)
+    surf = ax.plot_surface(X, Y, Z, rstride=5, cstride=5,
+                           color=[0.25, 1, 0.25], lw=1, antialiased=False)
+    ax.set_zlim(-1.01, 1.01)
 
 
 @image_comparison(baseline_images=['text3d'])
@@ -214,6 +257,25 @@ def test_trisurf3d():
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     ax.plot_trisurf(x, y, z, cmap=cm.jet, linewidth=0.2)
+
+
+@image_comparison(baseline_images=['trisurf3d_shaded'], remove_text=True,
+                  tol=0.03, extensions=['png'])
+def test_trisurf3d_shaded():
+    n_angles = 36
+    n_radii = 8
+    radii = np.linspace(0.125, 1.0, n_radii)
+    angles = np.linspace(0, 2*np.pi, n_angles, endpoint=False)
+    angles = np.repeat(angles[..., np.newaxis], n_radii, axis=1)
+    angles[:, 1::2] += np.pi/n_angles
+
+    x = np.append(0, (radii*np.cos(angles)).flatten())
+    y = np.append(0, (radii*np.sin(angles)).flatten())
+    z = np.sin(-x*y)
+
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.plot_trisurf(x, y, z, color=[1, 0.5, 0], linewidth=0.2)
 
 
 @image_comparison(baseline_images=['wireframe3d'], remove_text=True)
@@ -274,6 +336,7 @@ def test_quiver3d():
 
     ax.quiver(x, y, z, u, v, w, length=0.1, pivot='tip', normalize=True)
 
+
 @image_comparison(baseline_images=['quiver3d_empty'], remove_text=True)
 def test_quiver3d_empty():
     fig = plt.figure()
@@ -287,6 +350,7 @@ def test_quiver3d_empty():
             np.sin(np.pi * z))
 
     ax.quiver(x, y, z, u, v, w, length=0.1, pivot='tip', normalize=True)
+
 
 @image_comparison(baseline_images=['quiver3d_masked'], remove_text=True)
 def test_quiver3d_masked():
@@ -306,6 +370,7 @@ def test_quiver3d_masked():
 
     ax.quiver(x, y, z, u, v, w, length=0.1, pivot='tip', normalize=True)
 
+
 @image_comparison(baseline_images=['quiver3d_pivot_middle'], remove_text=True,
                   extensions=['png'])
 def test_quiver3d_pivot_middle():
@@ -320,6 +385,7 @@ def test_quiver3d_pivot_middle():
             np.sin(np.pi * z))
 
     ax.quiver(x, y, z, u, v, w, length=0.1, pivot='middle', normalize=True)
+
 
 @image_comparison(baseline_images=['quiver3d_pivot_tail'], remove_text=True,
                   extensions=['png'])
@@ -379,9 +445,10 @@ def test_axes3d_labelpad():
 def test_axes3d_cla():
     # fixed in pull request 4553
     fig = plt.figure()
-    ax = fig.add_subplot(1,1,1, projection='3d')
+    ax = fig.add_subplot(1, 1, 1, projection='3d')
     ax.set_axis_off()
     ax.cla()  # make sure the axis displayed is 3D (not 2D)
+
 
 def test_plotsurface_1d_raises():
     x = np.linspace(0.5, 10, num=100)
@@ -389,7 +456,7 @@ def test_plotsurface_1d_raises():
     X, Y = np.meshgrid(x, y)
     z = np.random.randn(100)
 
-    fig = plt.figure(figsize=(14,6))
+    fig = plt.figure(figsize=(14, 6))
     ax = fig.add_subplot(1, 2, 1, projection='3d')
     with pytest.raises(ValueError):
         ax.plot_surface(X, Y, z)
@@ -487,6 +554,7 @@ def test_proj_axes_cube_ortho():
 
     ax.set_xlim(-200, 200)
     ax.set_ylim(-200, 200)
+
 
 def test_rot():
     V = [1, 0, 0, 1]
@@ -628,9 +696,9 @@ class TestVoxels(object):
         x, y, z = np.indices((10, 10, 10))
         voxels = (x == y) | (y == z)
         colors = np.zeros((10, 10, 10, 3))
-        colors[...,0] = x/9.0
-        colors[...,1] = y/9.0
-        colors[...,2] = z/9.0
+        colors[..., 0] = x / 9
+        colors[..., 1] = y / 9
+        colors[..., 2] = z / 9
         ax.voxels(voxels, facecolors=colors)
 
     @image_comparison(
@@ -713,7 +781,7 @@ class TestVoxels(object):
         with pytest.raises(TypeError) as exc:
             ax.voxels(x, y)
         exc.match(".*voxels.*")
-        # x,y,z are positional only - this passes them on as attributes of
+        # x, y, z are positional only - this passes them on as attributes of
         # Poly3DCollection
         with pytest.raises(AttributeError):
             ax.voxels(filled=filled, x=x, y=y, z=z)

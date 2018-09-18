@@ -3,8 +3,8 @@
 /* Utilities to create scalars and empty arrays that behave like the
    Numpy array wrappers in numpy_cpp.h */
 
-#ifndef _SCALAR_H_
-#define _SCALAR_H_
+#ifndef MPL_SCALAR_H
+#define MPL_SCALAR_H
 
 namespace array
 {
@@ -52,12 +52,12 @@ class empty
 
     T &operator()(int i, int j = 0, int k = 0)
     {
-        throw "Accessed empty array";
+        throw std::runtime_error("Accessed empty array");
     }
 
     const T &operator()(int i, int j = 0, int k = 0) const
     {
-        throw "Accessed empty array";
+        throw std::runtime_error("Accessed empty array");
     }
 
     sub_t operator[](int i) const

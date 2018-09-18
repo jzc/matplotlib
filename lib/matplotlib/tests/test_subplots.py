@@ -1,6 +1,4 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
+import itertools
 import warnings
 
 import numpy
@@ -15,14 +13,15 @@ def check_shared(axs, x_shared, y_shared):
     x_shared and y_shared are n x n boolean matrices; entry (i, j) indicates
     whether the x (or y) axes of subplots i and j should be shared.
     """
-    shared = [axs[0]._shared_x_axes, axs[0]._shared_y_axes]
-    for (i1, ax1), (i2, ax2), (i3, (name, shared)) in zip(
+    for (i1, ax1), (i2, ax2), (i3, (name, shared)) in itertools.product(
             enumerate(axs),
             enumerate(axs),
             enumerate(zip("xy", [x_shared, y_shared]))):
         if i2 <= i1:
             continue
-        assert shared[i3].joined(ax1, ax2) == shared[i1, i2], \
+        assert \
+            (getattr(axs[0], "_shared_{}_axes".format(name)).joined(ax1, ax2)
+             == shared[i1, i2]), \
             "axes %i and %i incorrectly %ssharing %s axis" % (
                 i1, i2, "not " if shared[i1, i2] else "", name)
 
@@ -31,7 +30,7 @@ def check_visible(axs, x_visible, y_visible):
     def tostr(v):
         return "invisible" if v else "visible"
 
-    for (ax, vx, vy) in zip(axs, x_visible, y_visible):
+    for ax, vx, vy in zip(axs, x_visible, y_visible):
         for l in ax.get_xticklabels() + [ax.get_xaxis().offsetText]:
             assert l.get_visible() == vx, \
                     "X axis was incorrectly %s" % (tostr(vx))
@@ -101,6 +100,20 @@ def test_shared():
     check_visible(axs, [False, False, True, True], [True, False, True, False])
 
 
+def test_shared_and_moved():
+    # test if sharey is on, but then tick_left is called that labels don't
+    # re-appear.  Seaborn does this just to be sure yaxis is on left...
+    f, (a1, a2) = plt.subplots(1, 2, sharey=True)
+    check_visible([a2], [True], [False])
+    a2.yaxis.tick_left()
+    check_visible([a2], [True], [False])
+
+    f, (a1, a2) = plt.subplots(2, 1, sharex=True)
+    check_visible([a1], [False], [True])
+    a2.xaxis.tick_bottom()
+    check_visible([a1], [False], [True])
+
+
 def test_exceptions():
     # TODO should this test more options?
     with pytest.raises(ValueError):
@@ -130,3 +143,18 @@ def test_subplots_offsettext():
     axes[1, 0].plot(x, x)
     axes[0, 1].plot(y, x)
     axes[1, 1].plot(y, x)
+
+
+def test_get_gridspec():
+    # ahem, pretty trivial, but...
+    fig, ax = plt.subplots()
+    assert ax.get_subplotspec().get_gridspec() == ax.get_gridspec()
+
+
+def test_dont_mutate_kwargs():
+    subplot_kw = {'sharex': 'all'}
+    gridspec_kw = {'width_ratios': [1, 2]}
+    fig, ax = plt.subplots(1, 2, subplot_kw=subplot_kw,
+                           gridspec_kw=gridspec_kw)
+    assert subplot_kw == {'sharex': 'all'}
+    assert gridspec_kw == {'width_ratios': [1, 2]}

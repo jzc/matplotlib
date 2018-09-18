@@ -1,20 +1,19 @@
 """
 Module for creating Sankey diagrams using matplotlib
 """
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
 
-import six
-from six.moves import zip
+import logging
+from types import SimpleNamespace
+
 import numpy as np
 
-from matplotlib.cbook import iterable, Bunch
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 from matplotlib.transforms import Affine2D
-from matplotlib import verbose
 from matplotlib import docstring
 from matplotlib import rcParams
+
+_log = logging.getLogger(__name__)
 
 __author__ = "Kevin L. Davies"
 __credits__ = ["Yannick Copin"]
@@ -118,7 +117,7 @@ class Sankey(object):
 
         **Examples:**
 
-            .. plot:: gallery/api/sankey_basics.py
+            .. plot:: gallery/specialty_plots/sankey_basics.py
         """
         # Check the arguments.
         if gap < 0:
@@ -451,8 +450,8 @@ class Sankey(object):
             "orientations has length %d, but flows has length %d."
             % (len(orientations), n))
         if labels != '' and getattr(labels, '__iter__', False):
-            # iterable() isn't used because it would give True if labels is a
-            # string
+            # np.iterable() isn't used because it would give True if labels is
+            # a string
             if len(labels) != n:
                 raise ValueError(
                 "If labels is a list, then labels and flows must have the "
@@ -465,22 +464,21 @@ class Sankey(object):
             "trunklength is negative.\nThis isn't allowed, because it would "
             "cause poor layout.")
         if np.abs(np.sum(flows)) > self.tolerance:
-            verbose.report(
-                "The sum of the flows is nonzero (%f).\nIs the "
-                "system not at steady state?" % np.sum(flows), 'helpful')
+            _log.info("The sum of the flows is nonzero (%f).\nIs the "
+                     "system not at steady state?", np.sum(flows))
         scaled_flows = self.scale * flows
         gain = sum(max(flow, 0) for flow in scaled_flows)
         loss = sum(min(flow, 0) for flow in scaled_flows)
         if not (0.5 <= gain <= 2.0):
-            verbose.report(
+            _log.info(
                 "The scaled sum of the inputs is %f.\nThis may "
                 "cause poor layout.\nConsider changing the scale so"
-                " that the scaled sum is approximately 1.0." % gain, 'helpful')
+                " that the scaled sum is approximately 1.0.", gain)
         if not (-2.0 <= loss <= -0.5):
-            verbose.report(
+            _log.info(
                 "The scaled sum of the outputs is %f.\nThis may "
                 "cause poor layout.\nConsider changing the scale so"
-                " that the scaled sum is approximately 1.0." % gain, 'helpful')
+                " that the scaled sum is approximately 1.0.", gain)
         if prior is not None:
             if prior < 0:
                 raise ValueError("The index of the prior diagram is negative.")
@@ -522,11 +520,11 @@ class Sankey(object):
             elif flow <= -self.tolerance:
                 are_inputs[i] = False
             else:
-                verbose.report(
+                _log.info(
                     "The magnitude of flow %d (%f) is below the "
                     "tolerance (%f).\nIt will not be shown, and it "
                     "cannot be used in a connection."
-                    % (i, flow, self.tolerance), 'helpful')
+                    % (i, flow, self.tolerance))
 
         # Determine the angles of the arrows (before rotation).
         angles = [None] * n
@@ -551,7 +549,7 @@ class Sankey(object):
                     angles[i] = DOWN
 
         # Justify the lengths of the paths.
-        if iterable(pathlengths):
+        if np.iterable(pathlengths):
             if len(pathlengths) != n:
                 raise ValueError(
                 "If pathlengths is a list, then pathlengths and flows must "
@@ -703,7 +701,7 @@ class Sankey(object):
                 [(Path.CLOSEPOLY, urpath[0][1])])
 
         # Create a patch with the Sankey outline.
-        codes, vertices = list(zip(*path))
+        codes, vertices = zip(*path)
         vertices = np.array(vertices)
 
         def _get_angle(a, r):
@@ -733,13 +731,6 @@ class Sankey(object):
             vertices = translate(rotate(vertices))
             kwds = dict(s=patchlabel, ha='center', va='center')
             text = self.ax.text(*offset, **kwds)
-        if False:  # Debug
-            print("llpath\n", llpath)
-            print("ulpath\n", self._revert(ulpath))
-            print("urpath\n", urpath)
-            print("lrpath\n", self._revert(lrpath))
-            xs, ys = list(zip(*vertices))
-            self.ax.plot(xs, ys, 'go-')
         if rcParams['_internal.classic_mode']:
             fc = kwargs.pop('fc', kwargs.pop('facecolor', '#bfd1d4'))
             lw = kwargs.pop('lw', kwargs.pop('linewidth', 0.5))
@@ -747,7 +738,7 @@ class Sankey(object):
             fc = kwargs.pop('fc', kwargs.pop('facecolor', None))
             lw = kwargs.pop('lw', kwargs.pop('linewidth', None))
         if fc is None:
-            fc = six.next(self.ax._get_patches_for_fill.prop_cycler)['color']
+            fc = next(self.ax._get_patches_for_fill.prop_cycler)['color']
         patch = PathPatch(Path(vertices, codes), fc=fc, lw=lw, **kwargs)
         self.ax.add_patch(patch)
 
@@ -786,8 +777,9 @@ class Sankey(object):
         # where either could determine the margins (e.g., arrow shoulders).
 
         # Add this diagram as a subdiagram.
-        self.diagrams.append(Bunch(patch=patch, flows=flows, angles=angles,
-                                   tips=tips, text=text, texts=texts))
+        self.diagrams.append(
+            SimpleNamespace(patch=patch, flows=flows, angles=angles, tips=tips,
+                            text=text, texts=texts))
 
         # Allow a daisy-chained call structure (see docstring for the class).
         return self

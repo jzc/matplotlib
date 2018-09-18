@@ -8,38 +8,25 @@ counterparts (e.g., you may not be able to select all line styles) but
 they are meant to be fast for common use cases (e.g., a large set of solid
 line segemnts)
 """
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
 
-import six
-from six.moves import zip
-try:
-    from math import gcd
-except ImportError:
-    # LPy workaround
-    from fractions import gcd
-
+import math
+from numbers import Number
 import numpy as np
+
 import matplotlib as mpl
-import matplotlib.cbook as cbook
-import matplotlib.colors as mcolors
-import matplotlib.cm as cm
-from matplotlib import docstring
-import matplotlib.transforms as transforms
-import matplotlib.artist as artist
-from matplotlib.artist import allow_rasterization
-import matplotlib.path as mpath
-from matplotlib import _path
-import matplotlib.mlab as mlab
-import matplotlib.lines as mlines
+from . import (_path, artist, cbook, cm, colors as mcolors, docstring,
+               lines as mlines, path as mpath, transforms)
 
 CIRCLE_AREA_FACTOR = 1.0 / np.sqrt(np.pi)
 
 
-_color_aliases = {'facecolors': ['facecolor'],
-                  'edgecolors': ['edgecolor']}
-
-
+@cbook._define_aliases({
+    "antialiased": ["antialiaseds"],
+    "edgecolor": ["edgecolors"],
+    "facecolor": ["facecolors"],
+    "linestyle": ["linestyles", "dashes"],
+    "linewidth": ["linewidths", "lw"],
+})
 class Collection(artist.Artist, cm.ScalarMappable):
     """
     Base class for Collections.  Must be subclassed to be usable.
@@ -50,11 +37,16 @@ class Collection(artist.Artist, cm.ScalarMappable):
 
       prop[i % len(props)]
 
+    Exceptions are *capstyle* and *joinstyle* properties, these can
+    only be set globally for the whole collection.
+
     Keyword arguments and default values:
 
         * *edgecolors*: None
         * *facecolors*: None
         * *linewidths*: None
+        * *capstyle*:   None
+        * *joinstyle*:  None
         * *antialiaseds*: None
         * *offsets*: None
         * *transOffset*: transforms.IdentityTransform()
@@ -102,6 +94,8 @@ class Collection(artist.Artist, cm.ScalarMappable):
                  facecolors=None,
                  linewidths=None,
                  linestyles='solid',
+                 capstyle=None,
+                 joinstyle=None,
                  antialiaseds=None,
                  offsets=None,
                  transOffset=None,
@@ -143,10 +137,23 @@ class Collection(artist.Artist, cm.ScalarMappable):
         self.set_offset_position(offset_position)
         self.set_zorder(zorder)
 
+        if capstyle:
+            self.set_capstyle(capstyle)
+        else:
+            self._capstyle = None
+
+        if joinstyle:
+            self.set_joinstyle(joinstyle)
+        else:
+            self._joinstyle = None
+
+        self._offsets = np.zeros((1, 2))
         self._uniform_offsets = None
-        self._offsets = np.array([[0, 0]], float)
         if offsets is not None:
             offsets = np.asanyarray(offsets, float)
+            # Broadcast (2,) -> (1, 2) but nothing else.
+            if offsets.shape == (2,):
+                offsets = offsets[None, :]
             if transOffset is not None:
                 self._offsets = offsets
                 self._transOffset = transOffset
@@ -242,7 +249,7 @@ class Collection(artist.Artist, cm.ScalarMappable):
 
         return transform, transOffset, offsets, paths
 
-    @allow_rasterization
+    @artist.allow_rasterization
     def draw(self, renderer):
         if not self.get_visible():
             return
@@ -262,8 +269,10 @@ class Collection(artist.Artist, cm.ScalarMappable):
                 gc.set_hatch_color(self._hatch_color)
             except AttributeError:
                 # if we end up with a GC that does not have this method
-                warnings.warn("Your backend does not support setting the "
-                              "hatch color.")
+                cbook.warn_deprecated(
+                    "3.1", "Your backend does not support setting the hatch "
+                    "color; such backends will become unsupported in "
+                    "Matplotlib 3.3.")
 
         if self.get_sketch_params() is not None:
             gc.set_sketch_params(*self.get_sketch_params())
@@ -295,9 +304,14 @@ class Collection(artist.Artist, cm.ScalarMappable):
                 combined_transform = transform
             extents = paths[0].get_extents(combined_transform)
             width, height = renderer.get_canvas_width_height()
-            if (extents.width < width and
-                extents.height < height):
+            if extents.width < width and extents.height < height:
                 do_single_path_optimization = True
+
+        if self._joinstyle:
+            gc.set_joinstyle(self._joinstyle)
+
+        if self._capstyle:
+            gc.set_capstyle(self._capstyle)
 
         if do_single_path_optimization:
             gc.set_foreground(tuple(edgecolors[0]))
@@ -322,6 +336,13 @@ class Collection(artist.Artist, cm.ScalarMappable):
         self.stale = False
 
     def set_pickradius(self, pr):
+        """Set the pick radius used for containment tests.
+
+        Parameters
+        ----------
+        d : float
+            Pick radius, in points.
+        """
         self._pickradius = pr
 
     def get_pickradius(self):
@@ -342,7 +363,7 @@ class Collection(artist.Artist, cm.ScalarMappable):
 
         pickradius = (
             float(self._picker)
-            if cbook.is_numlike(self._picker) and
+            if isinstance(self._picker, Number) and
                self._picker is not True  # the bool, not just nonzero or 1
             else self._pickradius)
 
@@ -357,10 +378,12 @@ class Collection(artist.Artist, cm.ScalarMappable):
         return len(ind) > 0, dict(ind=ind)
 
     def set_urls(self, urls):
-        if urls is None:
-            self._urls = [None, ]
-        else:
-            self._urls = urls
+        """
+        Parameters
+        ----------
+        urls : List[str] or None
+        """
+        self._urls = urls if urls is not None else [None]
         self.stale = True
 
     def get_urls(self):
@@ -394,13 +417,15 @@ class Collection(artist.Artist, cm.ScalarMappable):
         can only be specified for the collection as a whole, not separately
         for each member.
 
-        ACCEPTS: [ '/' | '\\' | '|' | '-' | '+' | 'x' | 'o' | 'O' | '.' | '*' ]
+        Parameters
+        ----------
+        hatch : {'/', '\\', '|', '-', '+', 'x', 'o', 'O', '.', '*'}
         """
         self._hatch = hatch
         self.stale = True
 
     def get_hatch(self):
-        'Return the current hatching pattern'
+        """Return the current hatching pattern."""
         return self._hatch
 
     def set_offsets(self, offsets):
@@ -408,10 +433,14 @@ class Collection(artist.Artist, cm.ScalarMappable):
         Set the offsets for the collection.  *offsets* can be a scalar
         or a sequence.
 
-        ACCEPTS: float or sequence of floats
+        Parameters
+        ----------
+        offsets : float or sequence of floats
         """
         offsets = np.asanyarray(offsets, float)
-        #This decision is based on how they are initialized above
+        if offsets.shape == (2,):  # Broadcast (2,) -> (1, 2) but nothing else.
+            offsets = offsets[None, :]
+        # This decision is based on how they are initialized above in __init__.
         if self._uniform_offsets is None:
             self._offsets = offsets
         else:
@@ -419,10 +448,8 @@ class Collection(artist.Artist, cm.ScalarMappable):
         self.stale = True
 
     def get_offsets(self):
-        """
-        Return the offsets for the collection.
-        """
-        #This decision is based on how they are initialized above in __init__()
+        """Return the offsets for the collection."""
+        # This decision is based on how they are initialized above in __init__.
         if self._uniform_offsets is None:
             return self._offsets
         else:
@@ -435,6 +462,10 @@ class Collection(artist.Artist, cm.ScalarMappable):
         been applied, that is, the offsets are in screen coordinates.
         If offset_position is 'data', the offset is applied before the
         master transform, i.e., the offsets are in data coordinates.
+
+        Parameters
+        ----------
+        offset_position : {'screen', 'data'}
         """
         if offset_position not in ('screen', 'data'):
             raise ValueError("offset_position must be 'screen' or 'data'")
@@ -458,7 +489,9 @@ class Collection(artist.Artist, cm.ScalarMappable):
         or a sequence; if it is a sequence the patches will cycle
         through the sequence
 
-        ACCEPTS: float or sequence of floats
+        Parameters
+        ----------
+        lw : float or sequence of floats
         """
         if lw is None:
             lw = mpl.rcParams['patch.linewidth']
@@ -471,14 +504,6 @@ class Collection(artist.Artist, cm.ScalarMappable):
         self._linewidths, self._linestyles = self._bcast_lwls(
             self._us_lw, self._us_linestyles)
         self.stale = True
-
-    def set_linewidths(self, lw):
-        """alias for set_linewidth"""
-        return self.set_linewidth(lw)
-
-    def set_lw(self, lw):
-        """alias for set_linewidth"""
-        return self.set_linewidth(lw)
 
     def set_linestyle(self, ls):
         """
@@ -497,21 +522,15 @@ class Collection(artist.Artist, cm.ScalarMappable):
 
             (offset, onoffseq),
 
-        where ``onoffseq`` is an even length tuple of on and off ink
-        in points.
-
-        ACCEPTS: ['solid' | 'dashed', 'dashdot', 'dotted' |
-                   (offset, on-off-dash-seq) |
-                   ``'-'`` | ``'--'`` | ``'-.'`` | ``':'`` | ``'None'`` |
-                   ``' '`` | ``''``]
+        where ``onoffseq`` is an even length tuple of on and off ink in points.
 
         Parameters
         ----------
-        ls : { '-',  '--', '-.', ':'} and more see description
+        ls : {'-', '--', '-.', ':', '', (offset, on-off-seq), ...}
             The line style.
         """
         try:
-            if isinstance(ls, six.string_types):
+            if isinstance(ls, str):
                 ls = cbook.ls_mapper.get(ls, ls)
                 dashes = [mlines._get_dash_pattern(ls)]
             else:
@@ -530,6 +549,42 @@ class Collection(artist.Artist, cm.ScalarMappable):
         # broadcast and scale the lw and dash patterns
         self._linewidths, self._linestyles = self._bcast_lwls(
             self._us_lw, self._us_linestyles)
+
+    def set_capstyle(self, cs):
+        """
+        Set the capstyle for the collection. The capstyle can
+        only be set globally for all elements in the collection
+
+        Parameters
+        ----------
+        cs : {'butt', 'round', 'projecting'}
+            The capstyle
+        """
+        if cs in ('butt', 'round', 'projecting'):
+            self._capstyle = cs
+        else:
+            raise ValueError('Unrecognized cap style.  Found %s' % cs)
+
+    def get_capstyle(self):
+        return self._capstyle
+
+    def set_joinstyle(self, js):
+        """
+        Set the joinstyle for the collection. The joinstyle can only be
+        set globally for all elements in the collection.
+
+        Parameters
+        ----------
+        js : {'miter', 'round', 'bevel'}
+            The joinstyle
+        """
+        if js in ('miter', 'round', 'bevel'):
+            self._joinstyle = js
+        else:
+            raise ValueError('Unrecognized join style.  Found %s' % js)
+
+    def get_joinstyle(self):
+        return self._joinstyle
 
     @staticmethod
     def _bcast_lwls(linewidths, dashes):
@@ -561,9 +616,9 @@ class Collection(artist.Artist, cm.ScalarMappable):
         if len(dashes) != len(linewidths):
             l_dashes = len(dashes)
             l_lw = len(linewidths)
-            GCD = gcd(l_dashes, l_lw)
-            dashes = list(dashes) * (l_lw // GCD)
-            linewidths = list(linewidths) * (l_dashes // GCD)
+            gcd = math.gcd(l_dashes, l_lw)
+            dashes = list(dashes) * (l_lw // gcd)
+            linewidths = list(linewidths) * (l_dashes // gcd)
 
         # scale the dash patters
         dashes = [mlines._scale_dashes(o, d, lw)
@@ -571,39 +626,31 @@ class Collection(artist.Artist, cm.ScalarMappable):
 
         return linewidths, dashes
 
-    def set_linestyles(self, ls):
-        """alias for set_linestyle"""
-        return self.set_linestyle(ls)
-
-    def set_dashes(self, ls):
-        """alias for set_linestyle"""
-        return self.set_linestyle(ls)
-
     def set_antialiased(self, aa):
         """
         Set the antialiasing state for rendering.
 
-        ACCEPTS: Boolean or sequence of booleans
+        Parameters
+        ----------
+        aa : bool or sequence of bools
         """
         if aa is None:
             aa = mpl.rcParams['patch.antialiased']
         self._antialiaseds = np.atleast_1d(np.asarray(aa, bool))
         self.stale = True
 
-    def set_antialiaseds(self, aa):
-        """alias for set_antialiased"""
-        return self.set_antialiased(aa)
-
     def set_color(self, c):
         """
         Set both the edgecolor and the facecolor.
-
-        ACCEPTS: matplotlib color arg or sequence of rgba tuples
 
         .. seealso::
 
             :meth:`set_facecolor`, :meth:`set_edgecolor`
                For setting the edge or face color individually.
+
+        Parameters
+        ----------
+        c : matplotlib color arg or sequence of rgba tuples
         """
         self.set_facecolor(c)
         self.set_edgecolor(c)
@@ -630,26 +677,21 @@ class Collection(artist.Artist, cm.ScalarMappable):
 
         If *c* is 'none', the patch will not be filled.
 
-        ACCEPTS: matplotlib color spec or sequence of specs
+        Parameters
+        ----------
+        c : color or sequence of colors
         """
         self._original_facecolor = c
         self._set_facecolor(c)
 
-    def set_facecolors(self, c):
-        """alias for set_facecolor"""
-        return self.set_facecolor(c)
-
     def get_facecolor(self):
         return self._facecolors
-    get_facecolors = get_facecolor
 
     def get_edgecolor(self):
-        if (isinstance(self._edgecolors, six.string_types)
-                   and self._edgecolors == str('face')):
-            return self.get_facecolors()
+        if cbook._str_equal(self._edgecolors, 'face'):
+            return self.get_facecolor()
         else:
             return self._edgecolors
-    get_edgecolors = get_edgecolor
 
     def _set_edgecolor(self, c):
         set_hatch_color = True
@@ -690,21 +732,21 @@ class Collection(artist.Artist, cm.ScalarMappable):
         the face color.  If it is 'none', the patch boundary will not
         be drawn.
 
-        ACCEPTS: matplotlib color spec or sequence of specs
+        Parameters
+        ----------
+        c : color or sequence of colors
         """
         self._original_edgecolor = c
         self._set_edgecolor(c)
-
-    def set_edgecolors(self, c):
-        """alias for set_edgecolor"""
-        return self.set_edgecolor(c)
 
     def set_alpha(self, alpha):
         """
         Set the alpha tranparencies of the collection.  *alpha* must be
         a float or *None*.
 
-        ACCEPTS: float or None
+        Parameters
+        ----------
+        alpha : float or None
         """
         if alpha is not None:
             try:
@@ -716,13 +758,11 @@ class Collection(artist.Artist, cm.ScalarMappable):
         self._set_facecolor(self._original_facecolor)
         self._set_edgecolor(self._original_edgecolor)
 
-    def get_linewidths(self):
+    def get_linewidth(self):
         return self._linewidths
-    get_linewidth = get_linewidths
 
-    def get_linestyles(self):
+    def get_linestyle(self):
         return self._linestyles
-    get_dashes = get_linestyle = get_linestyles
 
     def update_scalarmappable(self):
         """
@@ -766,6 +806,7 @@ class Collection(artist.Artist, cm.ScalarMappable):
         self.cmap = other.cmap
         # self.update_dict = other.update_dict # do we need to copy this? -JJL
         self.stale = True
+
 
 # these are not available for the object inspector until after the
 # class is built so we define an initial set here for the init
@@ -836,7 +877,7 @@ class _CollectionWithSizes(Collection):
             self._transforms[:, 2, 2] = 1.0
         self.stale = True
 
-    @allow_rasterization
+    @artist.allow_rasterization
     def draw(self, renderer):
         self.set_sizes(self._sizes, self.figure.dpi)
         Collection.draw(self, renderer)
@@ -923,7 +964,7 @@ class PolyCollection(_CollectionWithSizes):
 
     def set_verts_and_codes(self, verts, codes):
         '''This allows one to initialize vertices with path codes.'''
-        if (len(verts) != len(codes)):
+        if len(verts) != len(codes):
             raise ValueError("'codes' must be a 1D list or array "
                              "with the same length of 'verts'")
         self._paths = []
@@ -971,7 +1012,7 @@ class BrokenBarHCollection(PolyCollection):
         passed on to the collection.
         """
         xranges = []
-        for ind0, ind1 in mlab.contiguous_regions(where):
+        for ind0, ind1 in cbook.contiguous_regions(where):
             xslice = x[ind0:ind1]
             if not len(xslice):
                 continue
@@ -1007,7 +1048,7 @@ class RegularPolyCollection(_CollectionWithSizes):
 
         %(Collection)s
 
-        Example: see :file:`examples/dynamic_collection.py` for
+        Example: see :doc:`/gallery/event_handling/lasso_demo` for a
         complete example::
 
             offsets = np.random.rand(20,2)
@@ -1017,11 +1058,11 @@ class RegularPolyCollection(_CollectionWithSizes):
             collection = RegularPolyCollection(
                 numsides=5, # a pentagon
                 rotation=0, sizes=(50,),
-                facecolors = facecolors,
-                edgecolors = (black,),
-                linewidths = (1,),
-                offsets = offsets,
-                transOffset = ax.transData,
+                facecolors=facecolors,
+                edgecolors=(black,),
+                linewidths=(1,),
+                offsets=offsets,
+                transOffset=ax.transData,
                 )
         """
         Collection.__init__(self, **kwargs)
@@ -1037,7 +1078,7 @@ class RegularPolyCollection(_CollectionWithSizes):
     def get_rotation(self):
         return self._rotation
 
-    @allow_rasterization
+    @artist.allow_rasterization
     def draw(self, renderer):
         self.set_sizes(self._sizes, self.figure.dpi)
         self._transforms = [
@@ -1090,29 +1131,52 @@ class LineCollection(Collection):
                  **kwargs
                  ):
         """
-        *segments*
-            a sequence of (*line0*, *line1*, *line2*), where::
+        Parameters
+        ----------
+        segments :
+            A sequence of (*line0*, *line1*, *line2*), where::
 
                 linen = (x0, y0), (x1, y1), ... (xm, ym)
 
             or the equivalent numpy array with two columns. Each line
             can be a different length.
 
-        *colors*
-            must be a sequence of RGBA tuples (e.g., arbitrary color
+        colors : sequence, optional
+            A sequence of RGBA tuples (e.g., arbitrary color
             strings, etc, not allowed).
 
-        *antialiaseds*
-            must be a sequence of ones or zeros
+        antialiaseds : sequence, optional
+            A sequence of ones or zeros.
 
-        *linestyles* [ 'solid' | 'dashed' | 'dashdot' | 'dotted' ]
-            a string or dash tuple. The dash tuple is::
+        linestyles : string, tuple, optional
+            Either one of [ 'solid' | 'dashed' | 'dashdot' | 'dotted' ], or
+            a dash tuple. The dash tuple is::
 
-                (offset, onoffseq),
+                (offset, onoffseq)
 
-            where *onoffseq* is an even length tuple of on and off ink
+            where ``onoffseq`` is an even length tuple of on and off ink
             in points.
 
+        norm : Normalize, optional
+            `~.colors.Normalize` instance.
+
+        cmap : string or Colormap, optional
+            Colormap name or `~.colors.Colormap` instance.
+
+        pickradius : float, optional
+            The tolerance in points for mouse clicks picking a line.
+            Default is 5 pt.
+
+        zorder : int, optional
+           zorder of the LineCollection. Default is 2.
+
+        facecolors : optional
+           The facecolors of the LineCollection. Default is 'none'.
+           Setting to a value other than 'none' will lead to a filled
+           polygon being drawn between points on each line.
+
+        Notes
+        -----
         If *linewidths*, *colors*, or *antialiaseds* is None, they
         default to their rcParams setting, in sequence form.
 
@@ -1128,22 +1192,6 @@ class LineCollection(Collection):
 
         and this value will be added cumulatively to each successive
         segment, so as to produce a set of successively offset curves.
-
-        *norm*
-            None (optional for :class:`matplotlib.cm.ScalarMappable`)
-        *cmap*
-            None (optional for :class:`matplotlib.cm.ScalarMappable`)
-
-        *pickradius* is the tolerance for mouse clicks picking a line.
-        The default is 5 pt.
-
-        *zorder*
-           The zorder of the LineCollection.  Default is 2
-
-        *facecolors*
-           The facecolors of the LineCollection. Default is 'none'
-           Setting to a value other than 'none' will lead to a filled
-           polygon being drawn between points on each line.
 
         The use of :class:`~matplotlib.cm.ScalarMappable` is optional.
         If the :class:`~matplotlib.cm.ScalarMappable` array
@@ -1197,6 +1245,13 @@ class LineCollection(Collection):
     set_paths = set_segments
 
     def get_segments(self):
+        """
+        Returns
+        -------
+        segments : list
+            List of segments in the LineCollection. Each list item contains an
+            array of vertices.
+        """
         segments = []
 
         for path in self._paths:
@@ -1221,12 +1276,14 @@ class LineCollection(Collection):
 
     def set_color(self, c):
         """
-        Set the color(s) of the line collection.  *c* can be a
-        matplotlib color arg (all patches have same color), or a
-        sequence or rgba tuples; if it is a sequence the patches will
-        cycle through the sequence.
+        Set the color(s) of the LineCollection.
 
-        ACCEPTS: matplotlib color arg or sequence of rgba tuples
+        Parameters
+        ----------
+        c :
+            Matplotlib color argument (all patches have same color), or a
+            sequence or rgba tuples; if it is a sequence the patches will
+            cycle through the sequence.
         """
         self.set_edgecolor(c)
         self.stale = True
@@ -1304,7 +1361,7 @@ class EventCollection(LineCollection):
         Examples
         --------
 
-        .. plot:: mpl_examples/lines_bars_and_markers/eventcollection_demo.py
+        .. plot:: gallery/lines_bars_and_markers/eventcollection_demo.py
         """
 
         segment = (lineoffset + linelength / 2.,
@@ -1471,17 +1528,11 @@ class EventCollection(LineCollection):
         self._lineoffset = lineoffset
 
     def get_linewidth(self):
-        '''
-        get the width of the lines used to mark each event
-        '''
-        return self.get_linewidths()[0]
+        """Get the width of the lines used to mark each event."""
+        return super(EventCollection, self).get_linewidth()[0]
 
-    def get_linestyle(self):
-        '''
-        get the style of the lines used to mark each event
-        [ 'solid' | 'dashed' | 'dashdot' | 'dotted' ]
-        '''
-        return self.get_linestyles()
+    def get_linewidths(self):
+        return super(EventCollection, self).get_linewidth()
 
     def get_color(self):
         '''
@@ -1517,28 +1568,32 @@ class EllipseCollection(Collection):
     @docstring.dedent_interpd
     def __init__(self, widths, heights, angles, units='points', **kwargs):
         """
-        *widths*: sequence
-            lengths of first axes (e.g., major axis lengths)
+        Parameters
+        ----------
+        widths : array-like
+            The lengths of the first axes (e.g., major axis lengths).
 
-        *heights*: sequence
-            lengths of second axes
+        heights : array-like
+            The lengths of second axes.
 
-        *angles*: sequence
-            angles of first axes, degrees CCW from the X-axis
+        angles : array-like
+            The angles of the first axes, degrees CCW from the x-axis.
 
-        *units*: ['points' | 'inches' | 'dots' | 'width' | 'height'
-        | 'x' | 'y' | 'xy']
+        units : {'points', 'inches', 'dots', 'width', 'height', 'x', 'y', 'xy'}
 
-            units in which majors and minors are given; 'width' and
+            The units in which majors and minors are given; 'width' and
             'height' refer to the dimensions of the axes, while 'x'
             and 'y' refer to the *offsets* data units. 'xy' differs
             from all others in that the angle as plotted varies with
             the aspect ratio, and equals the specified angle only when
             the aspect ratio is unity.  Hence it behaves the same as
             the :class:`~matplotlib.patches.Ellipse` with
-            axes.transData as its transform.
+            ``axes.transData`` as its transform.
 
-        Additional kwargs inherited from the base :class:`Collection`:
+        Other Parameters
+        ----------------
+        **kwargs
+            Additional kwargs inherited from the base :class:`Collection`.
 
         %(Collection)s
         """
@@ -1594,7 +1649,7 @@ class EllipseCollection(Collection):
             m[:2, 2:] = 0
             self.set_transform(_affine(m))
 
-    @allow_rasterization
+    @artist.allow_rasterization
     def draw(self, renderer):
         self._set_transforms()
         Collection.draw(self, renderer)
@@ -1694,13 +1749,11 @@ class TriMesh(Collection):
 
         This function is primarily of use to backend implementers.
         """
-        Path = mpath.Path
         triangles = tri.get_masked_triangles()
-        verts = np.concatenate((tri.x[triangles][..., np.newaxis],
-                                tri.y[triangles][..., np.newaxis]), axis=2)
-        return [Path(x) for x in verts]
+        verts = np.stack((tri.x[triangles], tri.y[triangles]), axis=-1)
+        return [mpath.Path(x) for x in verts]
 
-    @allow_rasterization
+    @artist.allow_rasterization
     def draw(self, renderer):
         if not self.get_visible():
             return
@@ -1711,8 +1764,7 @@ class TriMesh(Collection):
         tri = self._triangulation
         triangles = tri.get_masked_triangles()
 
-        verts = np.concatenate((tri.x[triangles][..., np.newaxis],
-                                tri.y[triangles][..., np.newaxis]), axis=2)
+        verts = np.stack((tri.x[triangles], tri.y[triangles]), axis=-1)
 
         self.update_scalarmappable()
         colors = self._facecolors[triangles]
@@ -1793,22 +1845,19 @@ class QuadMesh(Collection):
 
         This function is primarily of use to backend implementers.
         """
-        Path = mpath.Path
-
         if isinstance(coordinates, np.ma.MaskedArray):
             c = coordinates.data
         else:
             c = coordinates
-
         points = np.concatenate((
-                    c[0:-1, 0:-1],
-                    c[0:-1, 1:],
+                    c[:-1, :-1],
+                    c[:-1, 1:],
                     c[1:, 1:],
-                    c[1:, 0:-1],
-                    c[0:-1, 0:-1]
+                    c[1:, :-1],
+                    c[:-1, :-1]
                 ), axis=2)
         points = points.reshape((meshWidth * meshHeight, 5, 2))
-        return [Path(x) for x in points]
+        return [mpath.Path(x) for x in points]
 
     def convert_mesh_to_triangles(self, meshWidth, meshHeight, coordinates):
         """
@@ -1852,7 +1901,7 @@ class QuadMesh(Collection):
 
         return triangles, colors
 
-    @allow_rasterization
+    @artist.allow_rasterization
     def draw(self, renderer):
         if not self.get_visible():
             return

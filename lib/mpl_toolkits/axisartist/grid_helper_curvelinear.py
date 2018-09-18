@@ -1,21 +1,16 @@
 """
 An experimental support for curvilinear grid.
 """
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-from six.moves import zip
-
 from itertools import chain
-from .grid_finder import GridFinder
 
-from  .axislines import AxisArtistHelper, GridHelperBase
-from  .axis_artist import AxisArtist
-from matplotlib.transforms import Affine2D, IdentityTransform
 import numpy as np
 
 from matplotlib.path import Path
+from matplotlib.transforms import Affine2D, IdentityTransform
+from .axislines import AxisArtistHelper, GridHelperBase
+from .axis_artist import AxisArtist
+from .grid_finder import GridFinder
+
 
 class FixedAxisArtistHelper(AxisArtistHelper.Fixed):
     """
@@ -28,9 +23,7 @@ class FixedAxisArtistHelper(AxisArtistHelper.Fixed):
          nth_coord = 0 ->  x axis, nth_coord = 1 -> y axis
         """
 
-        super(FixedAxisArtistHelper, self).__init__( \
-            loc=side,
-            )
+        super().__init__(loc=side)
 
         self.grid_helper = grid_helper
         if nth_coord_ticks is None:
@@ -53,7 +46,6 @@ class FixedAxisArtistHelper(AxisArtistHelper.Fixed):
         else:
             self._limits_inverted = False
 
-
     def change_tick_coord(self, coord_number=None):
         if coord_number is None:
             self.nth_coord_ticks = 1 - self.nth_coord_ticks
@@ -61,7 +53,6 @@ class FixedAxisArtistHelper(AxisArtistHelper.Fixed):
             self.nth_coord_ticks = coord_number
         else:
             raise Exception("wrong coord number")
-
 
     def get_tick_transform(self, axes):
         return axes.transData
@@ -72,8 +63,8 @@ class FixedAxisArtistHelper(AxisArtistHelper.Fixed):
         g = self.grid_helper
 
         if self._limits_inverted:
-            side = {"left":"right","right":"left",
-                    "top":"bottom", "bottom":"top"}[self.side]
+            side = {"left": "right", "right": "left",
+                    "top": "bottom", "bottom": "top"}[self.side]
         else:
             side = self.side
 
@@ -85,7 +76,6 @@ class FixedAxisArtistHelper(AxisArtistHelper.Fixed):
         return chain(ti1, ti2), iter([])
 
 
-
 class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
 
     def __init__(self, grid_helper, nth_coord, value, axis_direction=None):
@@ -94,15 +84,13 @@ class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
          nth_coord = 0 ->  x axis, nth_coord = 1 -> y axis
         """
 
-        super(FloatingAxisArtistHelper, self).__init__(nth_coord,
-                                                       value,
-                                                       )
+        super().__init__(nth_coord, value)
         self.value = value
         self.grid_helper = grid_helper
         self._extremes = None, None
 
-        self._get_line_path = None # a method that returns a Path.
-        self._line_num_points = 100 # number of points to create a line
+        self._get_line_path = None  # a method that returns a Path.
+        self._line_num_points = 100  # number of points to create a line
 
     def set_extremes(self, e1, e2):
         self._extremes = e1, e2
@@ -117,7 +105,7 @@ class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
                                               x1, y1, x2, y2)
 
         extremes = list(extremes)
-        e1, e2 = self._extremes # ranges of other coordinates
+        e1, e2 = self._extremes  # ranges of other coordinates
         if self.nth_coord == 0:
             if e1 is not None:
                 extremes[2] = max(e1, extremes[2])
@@ -150,7 +138,6 @@ class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
 
         grid_finder = self.grid_helper.grid_finder
 
-        #e1, e2 = self._extremes # ranges of other coordinates
         if self.nth_coord == 0:
             xx0 = np.linspace(self.value, self.value, self._line_num_points)
             yy0 = np.linspace(extremes[2], extremes[3], self._line_num_points)
@@ -164,7 +151,7 @@ class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
         self.grid_info = grid_info
 
     def get_axislabel_transform(self, axes):
-        return Affine2D() #axes.transData
+        return Affine2D()  # axes.transData
 
     def get_axislabel_pos_angle(self, axes):
 
@@ -185,8 +172,7 @@ class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
         trans_passingthrough_point = axes.transData + axes.transAxes.inverted()
         p = trans_passingthrough_point.transform_point([xx1[0], yy1[0]])
 
-
-        if (0. <= p[0] <= 1.) and (0. <= p[1] <= 1.):
+        if 0 <= p[0] <= 1 and 0 <= p[1] <= 1:
             xx1c, yy1c = axes.transData.transform_point([xx1[0], yy1[0]])
             xx2, yy2 = grid_finder.transform_xy([xx0+dxx], [yy0+dyy])
             xx2c, yy2c = axes.transData.transform_point([xx2[0], yy2[0]])
@@ -195,11 +181,8 @@ class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
         else:
             return None, None
 
-
-
-
     def get_tick_transform(self, axes):
-        return IdentityTransform() #axes.transData
+        return IdentityTransform()  # axes.transData
 
     def get_tick_iterators(self, axes):
         """tick_loc, tick_angle, tick_label, (optionally) tick_label"""
@@ -283,29 +266,19 @@ class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
             labels = self.grid_info["lon_labels"]
             labels = [l for l, m in zip(labels, mask) if m]
 
-
         def f1():
-            dd = np.arctan2(yy1b-yy1a, xx1b-xx1a) # angle normal
-            dd2 = np.arctan2(yy2b-yy2a, xx2b-xx2a) # angle tangent
-            mm = ((yy1b-yy1a)==0.) & ((xx1b-xx1a)==0.) # mask where dd1 is not defined
+            dd = np.arctan2(yy1b-yy1a, xx1b-xx1a)  # angle normal
+            dd2 = np.arctan2(yy2b-yy2a, xx2b-xx2a)  # angle tangent
+            mm = (yy1b-yy1a == 0) & (xx1b-xx1a == 0)  # mask where dd1 is not defined
             dd[mm] = dd2[mm] + np.pi / 2
-            #dd = np.arctan2(yy2-yy1, xx2-xx1) # angle normal
-            #dd2 = np.arctan2(yy3-yy1, xx3-xx1) # angle tangent
-            #mm = ((yy2-yy1)==0.) & ((xx2-xx1)==0.) # mask where dd1 is not defined
-            #dd[mm] = dd2[mm] + np.pi / 2
 
-            #dd += np.pi
-
-            #dd = np.arctan2(xx2-xx1, angle_tangent-yy1)
             trans_tick = self.get_tick_transform(axes)
             tr2ax = trans_tick + axes.transAxes.inverted()
             for x, y, d, d2, lab in zip(xx1, yy1, dd, dd2, labels):
                 c2 = tr2ax.transform_point((x, y))
-                delta=0.00001
-                if (0. -delta<= c2[0] <= 1.+delta) and \
-                       (0. -delta<= c2[1] <= 1.+delta):
-                    d1 = d/3.14159*180.
-                    d2 = d2/3.14159*180.
+                delta = 0.00001
+                if 0-delta <= c2[0] <= 1+delta and 0-delta <= c2[1] <= 1+delta:
+                    d1, d2 = np.rad2deg([d, d2])
                     yield [x, y], d1, d2, lab
 
         return f1(), iter([])
@@ -318,11 +291,9 @@ class FloatingAxisArtistHelper(AxisArtistHelper.Floating):
         x, y = self.grid_info["line_xy"]
 
         if self._get_line_path is None:
-            return Path(list(zip(x, y)))
+            return Path(np.column_stack([x, y]))
         else:
             return self._get_line_path(axes, x, y)
-
-
 
 
 class GridHelperCurveLinear(GridHelperBase):
@@ -343,11 +314,11 @@ class GridHelperCurveLinear(GridHelperBase):
 
         e.g., ``x2, y2 = trans(x1, y1)``
         """
-        super(GridHelperCurveLinear, self).__init__()
+        super().__init__()
 
         self.grid_info = None
         self._old_values = None
-        #self._grid_params = dict()
+        # self._grid_params = dict()
         self._aux_trans = aux_trans
 
         self.grid_finder = GridFinder(aux_trans,
@@ -357,7 +328,6 @@ class GridHelperCurveLinear(GridHelperBase):
                                       tick_formatter1,
                                       tick_formatter2)
 
-
     def update_grid_finder(self, aux_trans=None, **kw):
 
         if aux_trans is not None:
@@ -365,7 +335,6 @@ class GridHelperCurveLinear(GridHelperBase):
 
         self.grid_finder.update(**kw)
         self.invalidate()
-
 
     def _update(self, x1, x2, y1, y2):
         "bbox in 0-based image coordinates"
@@ -380,13 +349,11 @@ class GridHelperCurveLinear(GridHelperBase):
 
         self._force_update = False
 
-
     def new_fixed_axis(self, loc,
                        nth_coord=None,
                        axis_direction=None,
                        offset=None,
                        axes=None):
-
 
         if axes is None:
             axes = self.axes
@@ -394,14 +361,13 @@ class GridHelperCurveLinear(GridHelperBase):
         if axis_direction is None:
             axis_direction = loc
         _helper = FixedAxisArtistHelper(self, loc,
-                                        #nth_coord,
+                                        # nth_coord,
                                         nth_coord_ticks=nth_coord,
                                         )
 
         axisline = AxisArtist(axes, _helper, axis_direction=axis_direction)
 
         return axisline
-
 
     def new_floating_axis(self, nth_coord,
                           value,
@@ -412,33 +378,30 @@ class GridHelperCurveLinear(GridHelperBase):
         if axes is None:
             axes = self.axes
 
-        _helper = FloatingAxisArtistHelper( \
+        _helper = FloatingAxisArtistHelper(
             self, nth_coord, value, axis_direction)
 
         axisline = AxisArtist(axes, _helper)
 
-        #_helper = FloatingAxisArtistHelper(self, nth_coord,
-        #                                   value,
-        #                                   label_direction=label_direction,
-        #                                   )
+        # _helper = FloatingAxisArtistHelper(self, nth_coord,
+        #                                    value,
+        #                                    label_direction=label_direction,
+        #                                    )
 
-        #axisline = AxisArtistFloating(axes, _helper,
-        #                              axis_direction=axis_direction)
+        # axisline = AxisArtistFloating(axes, _helper,
+        #                               axis_direction=axis_direction)
         axisline.line.set_clip_on(True)
         axisline.line.set_clip_box(axisline.axes.bbox)
-        #axisline.major_ticklabels.set_visible(True)
-        #axisline.minor_ticklabels.set_visible(False)
+        # axisline.major_ticklabels.set_visible(True)
+        # axisline.minor_ticklabels.set_visible(False)
 
-        #axisline.major_ticklabels.set_rotate_along_line(True)
-        #axisline.set_rotate_label_along_line(True)
+        # axisline.major_ticklabels.set_rotate_along_line(True)
+        # axisline.set_rotate_label_along_line(True)
 
         return axisline
 
-
     def _update_grid(self, x1, y1, x2, y2):
-
         self.grid_info = self.grid_finder.get_grid_info(x1, y1, x2, y2)
-
 
     def get_gridlines(self, which="major", axis="both"):
         grid_lines = []
@@ -452,324 +415,21 @@ class GridHelperCurveLinear(GridHelperBase):
 
         return grid_lines
 
-
     def get_tick_iterator(self, nth_coord, axis_side, minor=False):
 
-        #axisnr = dict(left=0, bottom=1, right=2, top=3)[axis_side]
+        # axisnr = dict(left=0, bottom=1, right=2, top=3)[axis_side]
         angle_tangent = dict(left=90, right=90, bottom=0, top=0)[axis_side]
-        #angle = [0, 90, 180, 270][axisnr]
+        # angle = [0, 90, 180, 270][axisnr]
         lon_or_lat = ["lon", "lat"][nth_coord]
-        if not minor: # major ticks
-            def f():
-                for (xy, a), l in zip(self.grid_info[lon_or_lat]["tick_locs"][axis_side],
-                                    self.grid_info[lon_or_lat]["tick_labels"][axis_side]):
-                    angle_normal = a
-                    yield xy, angle_normal, angle_tangent, l
+        if not minor:  # major ticks
+            for (xy, a), l in zip(self.grid_info[lon_or_lat]["tick_locs"][axis_side],
+                                  self.grid_info[lon_or_lat]["tick_labels"][axis_side]):
+                angle_normal = a
+                yield xy, angle_normal, angle_tangent, l
         else:
-            def f():
-                for (xy, a), l in zip(self.grid_info[lon_or_lat]["tick_locs"][axis_side],
-                                    self.grid_info[lon_or_lat]["tick_labels"][axis_side]):
-                    angle_normal = a
-                    yield xy, angle_normal, angle_tangent, ""
-                #for xy, a, l in self.grid_info[lon_or_lat]["ticks"][axis_side]:
-                #    yield xy, a, ""
-
-        return f()
-
-
-
-def test3():
-
-    import numpy as np
-    from matplotlib.transforms import Transform
-    from matplotlib.path import Path
-
-    class MyTransform(Transform):
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
-
-        def __init__(self, resolution):
-            """
-            Create a new Aitoff transform.  Resolution is the number of steps
-            to interpolate between each input line segment to approximate its
-            path in curved Aitoff space.
-            """
-            Transform.__init__(self)
-            self._resolution = resolution
-
-        def transform(self, ll):
-            x = ll[:, 0:1]
-            y  = ll[:, 1:2]
-
-            return np.concatenate((x, y-x), 1)
-
-        transform.__doc__ = Transform.transform.__doc__
-
-        transform_non_affine = transform
-        transform_non_affine.__doc__ = Transform.transform_non_affine.__doc__
-
-        def transform_path(self, path):
-            vertices = path.vertices
-            ipath = path.interpolated(self._resolution)
-            return Path(self.transform(ipath.vertices), ipath.codes)
-        transform_path.__doc__ = Transform.transform_path.__doc__
-
-        transform_path_non_affine = transform_path
-        transform_path_non_affine.__doc__ = Transform.transform_path_non_affine.__doc__
-
-        def inverted(self):
-            return MyTransformInv(self._resolution)
-        inverted.__doc__ = Transform.inverted.__doc__
-
-    class MyTransformInv(Transform):
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
-
-        def __init__(self, resolution):
-            Transform.__init__(self)
-            self._resolution = resolution
-
-        def transform(self, ll):
-            x = ll[:, 0:1]
-            y  = ll[:, 1:2]
-
-            return np.concatenate((x, y+x), 1)
-        transform.__doc__ = Transform.transform.__doc__
-
-        def inverted(self):
-            return MyTransform(self._resolution)
-        inverted.__doc__ = Transform.inverted.__doc__
-
-
-
-    import matplotlib.pyplot as plt
-    fig = plt.figure(1)
-    fig.clf()
-    tr = MyTransform(1)
-    grid_helper = GridHelperCurveLinear(tr)
-
-
-    from mpl_toolkits.axes_grid1.parasite_axes import host_subplot_class_factory
-    from .axislines import Axes
-
-    SubplotHost = host_subplot_class_factory(Axes)
-
-    ax1 = SubplotHost(fig, 1, 1, 1, grid_helper=grid_helper)
-
-    fig.add_subplot(ax1)
-
-    ax2 = ParasiteAxesAuxTrans(ax1, tr, "equal")
-    ax1.parasites.append(ax2)
-    ax2.plot([3, 6], [5.0, 10.])
-
-    ax1.set_aspect(1.)
-    ax1.set_xlim(0, 10)
-    ax1.set_ylim(0, 10)
-
-    ax1.grid(True)
-    plt.draw()
-
-
-
-def curvelinear_test2(fig):
-    """
-    polar projection, but in a rectangular box.
-    """
-    global ax1
-    import numpy as np
-    from . import angle_helper
-    from matplotlib.projections import PolarAxes
-    from matplotlib.transforms import Affine2D
-
-    from mpl_toolkits.axes_grid.parasite_axes import SubplotHost, \
-         ParasiteAxesAuxTrans
-    import matplotlib.cbook as cbook
-
-    # PolarAxes.PolarTransform takes radian. However, we want our coordinate
-    # system in degree
-    tr = Affine2D().scale(np.pi/180., 1.) + PolarAxes.PolarTransform()
-
-    # polar projection, which involves cycle, and also has limits in
-    # its coordinates, needs a special method to find the extremes
-    # (min, max of the coordinate within the view).
-
-    # 20, 20 : number of sampling points along x, y direction
-    extreme_finder = angle_helper.ExtremeFinderCycle(20, 20,
-                                                     lon_cycle = 360,
-                                                     lat_cycle = None,
-                                                     lon_minmax = None,
-                                                     lat_minmax = (0, np.inf),
-                                                     )
-
-    grid_locator1 = angle_helper.LocatorDMS(5)
-    # Find a grid values appropriate for the coordinate (degree,
-    # minute, second).
-
-    tick_formatter1 = angle_helper.FormatterDMS()
-    # And also uses an appropriate formatter.  Note that,the
-    # acceptable Locator and Formatter class is a bit different than
-    # that of mpl's, and you cannot directly use mpl's Locator and
-    # Formatter here (but may be possible in the future).
-
-    grid_helper = GridHelperCurveLinear(tr,
-                                        extreme_finder=extreme_finder,
-                                        grid_locator1=grid_locator1,
-                                        tick_formatter1=tick_formatter1
-                                        )
-
-
-    ax1 = SubplotHost(fig, 1, 1, 1, grid_helper=grid_helper)
-
-    # make ticklabels of right and top axis visible.
-    ax1.axis["right"].major_ticklabels.set_visible(True)
-    ax1.axis["top"].major_ticklabels.set_visible(True)
-
-    # let right axis shows ticklabels for 1st coordinate (angle)
-    ax1.axis["right"].get_helper().nth_coord_ticks=0
-    # let bottom axis shows ticklabels for 2nd coordinate (radius)
-    ax1.axis["bottom"].get_helper().nth_coord_ticks=1
-
-    fig.add_subplot(ax1)
-
-    grid_helper = ax1.get_grid_helper()
-    ax1.axis["lat"] = axis = grid_helper.new_floating_axis(0, 60, axes=ax1)
-    axis.label.set_text("Test")
-    axis.label.set_visible(True)
-    #axis._extremes = 2, 10
-    #axis.label.set_text("Test")
-    #axis.major_ticklabels.set_visible(False)
-    #axis.major_ticks.set_visible(False)
-    axis.get_helper()._extremes=2, 10
-
-    ax1.axis["lon"] = axis = grid_helper.new_floating_axis(1, 6, axes=ax1)
-    #axis.major_ticklabels.set_visible(False)
-    #axis.major_ticks.set_visible(False)
-    axis.label.set_text("Test 2")
-    axis.get_helper()._extremes=-180, 90
-
-    # A parasite axes with given transform
-    ax2 = ParasiteAxesAuxTrans(ax1, tr, "equal")
-    # note that ax2.transData == tr + ax1.transData
-    # Anthing you draw in ax2 will match the ticks and grids of ax1.
-    ax1.parasites.append(ax2)
-    intp = cbook.simple_linear_interpolation
-    ax2.plot(intp(np.array([0, 30]), 50),
-             intp(np.array([10., 10.]), 50))
-
-    ax1.set_aspect(1.)
-    ax1.set_xlim(-5, 12)
-    ax1.set_ylim(-5, 10)
-
-    ax1.grid(True)
-
-
-def curvelinear_test3(fig):
-    """
-    polar projection, but in a rectangular box.
-    """
-    global ax1, axis
-    import numpy as np
-    from . import angle_helper
-    from matplotlib.projections import PolarAxes
-    from matplotlib.transforms import Affine2D
-
-    from mpl_toolkits.axes_grid.parasite_axes import SubplotHost
-
-    # PolarAxes.PolarTransform takes radian. However, we want our coordinate
-    # system in degree
-    tr = Affine2D().scale(np.pi/180., 1.) + PolarAxes.PolarTransform()
-
-    # polar projection, which involves cycle, and also has limits in
-    # its coordinates, needs a special method to find the extremes
-    # (min, max of the coordinate within the view).
-
-    # 20, 20 : number of sampling points along x, y direction
-    extreme_finder = angle_helper.ExtremeFinderCycle(20, 20,
-                                                     lon_cycle = 360,
-                                                     lat_cycle = None,
-                                                     lon_minmax = None,
-                                                     lat_minmax = (0, np.inf),
-                                                     )
-
-    grid_locator1 = angle_helper.LocatorDMS(12)
-    # Find a grid values appropriate for the coordinate (degree,
-    # minute, second).
-
-    tick_formatter1 = angle_helper.FormatterDMS()
-    # And also uses an appropriate formatter.  Note that,the
-    # acceptable Locator and Formatter class is a bit different than
-    # that of mpl's, and you cannot directly use mpl's Locator and
-    # Formatter here (but may be possible in the future).
-
-    grid_helper = GridHelperCurveLinear(tr,
-                                        extreme_finder=extreme_finder,
-                                        grid_locator1=grid_locator1,
-                                        tick_formatter1=tick_formatter1
-                                        )
-
-
-    ax1 = SubplotHost(fig, 1, 1, 1, grid_helper=grid_helper)
-
-    for axis in list(six.itervalues(ax1.axis)):
-        axis.set_visible(False)
-
-    fig.add_subplot(ax1)
-
-    grid_helper = ax1.get_grid_helper()
-    ax1.axis["lat1"] = axis = grid_helper.new_floating_axis(0, 130,
-                                                            axes=ax1,
-                                                            axis_direction="left"
-                                                            )
-    axis.label.set_text("Test")
-    axis.label.set_visible(True)
-    axis.get_helper()._extremes=0.001, 10
-
-
-
-    grid_helper = ax1.get_grid_helper()
-    ax1.axis["lat2"] = axis = grid_helper.new_floating_axis(0, 50, axes=ax1,
-                                                            axis_direction="right")
-    axis.label.set_text("Test")
-    axis.label.set_visible(True)
-    axis.get_helper()._extremes=0.001, 10
-
-    ax1.axis["lon"] = axis = grid_helper.new_floating_axis(1, 10,
-                                                           axes=ax1,
-                                                           axis_direction="bottom")
-    axis.label.set_text("Test 2")
-    axis.get_helper()._extremes= 50, 130
-    axis.major_ticklabels.set_axis_direction("top")
-    axis.label.set_axis_direction("top")
-
-    grid_helper.grid_finder.grid_locator1.den = 5
-    grid_helper.grid_finder.grid_locator2._nbins = 5
-
-
-#     # A parasite axes with given transform
-#     ax2 = ParasiteAxesAuxTrans(ax1, tr, "equal")
-#     # note that ax2.transData == tr + ax1.transData
-#     # Anthing you draw in ax2 will match the ticks and grids of ax1.
-#     ax1.parasites.append(ax2)
-#     intp = cbook.simple_linear_interpolation
-#     ax2.plot(intp(np.array([0, 30]), 50),
-#              intp(np.array([10., 10.]), 50))
-
-    ax1.set_aspect(1.)
-    ax1.set_xlim(-5, 12)
-    ax1.set_ylim(-5, 10)
-
-    ax1.grid(True)
-
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    fig = plt.figure(1, figsize=(5, 5))
-    fig.clf()
-
-    #test3()
-    #curvelinear_test2(fig)
-    curvelinear_test3(fig)
-
-    #plt.draw()
-    plt.show()
+            for (xy, a), l in zip(self.grid_info[lon_or_lat]["tick_locs"][axis_side],
+                                  self.grid_info[lon_or_lat]["tick_labels"][axis_side]):
+                angle_normal = a
+                yield xy, angle_normal, angle_tangent, ""
+            # for xy, a, l in self.grid_info[lon_or_lat]["ticks"][axis_side]:
+            #     yield xy, a, ""

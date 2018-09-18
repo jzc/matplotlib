@@ -1,25 +1,80 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-from six.moves import map
-
 import datetime
-import warnings
 import tempfile
+from unittest.mock import Mock
+
+import dateutil.tz
+import dateutil.rrule
+import numpy as np
 import pytest
-
-import dateutil
-import pytz
-
-try:
-    # mock in python 3.3+
-    from unittest import mock
-except ImportError:
-    import mock
 
 from matplotlib.testing.decorators import image_comparison
 import matplotlib.pyplot as plt
+from matplotlib.cbook import MatplotlibDeprecationWarning
 import matplotlib.dates as mdates
+
+
+def __has_pytz():
+    try:
+        import pytz
+        return True
+    except ImportError:
+        return False
+
+
+def test_date_numpyx():
+    # test that numpy dates work properly...
+    base = datetime.datetime(2017, 1, 1)
+    time = [base + datetime.timedelta(days=x) for x in range(0, 3)]
+    timenp = np.array(time, dtype='datetime64[ns]')
+    data = np.array([0., 2., 1.])
+    fig = plt.figure(figsize=(10, 2))
+    ax = fig.add_subplot(1, 1, 1)
+    h, = ax.plot(time, data)
+    hnp, = ax.plot(timenp, data)
+    assert np.array_equal(h.get_xdata(orig=False), hnp.get_xdata(orig=False))
+    fig = plt.figure(figsize=(10, 2))
+    ax = fig.add_subplot(1, 1, 1)
+    h, = ax.plot(data, time)
+    hnp, = ax.plot(data, timenp)
+    assert np.array_equal(h.get_ydata(orig=False), hnp.get_ydata(orig=False))
+
+
+@pytest.mark.parametrize('t0', [datetime.datetime(2017, 1, 1, 0, 1, 1),
+
+                                [datetime.datetime(2017, 1, 1, 0, 1, 1),
+                                 datetime.datetime(2017, 1, 1, 1, 1, 1)],
+
+                                [[datetime.datetime(2017, 1, 1, 0, 1, 1),
+                                  datetime.datetime(2017, 1, 1, 1, 1, 1)],
+                                 [datetime.datetime(2017, 1, 1, 2, 1, 1),
+                                  datetime.datetime(2017, 1, 1, 3, 1, 1)]]])
+@pytest.mark.parametrize('dtype', ['datetime64[s]',
+                                    'datetime64[us]',
+                                    'datetime64[ms]',
+                                    'datetime64[ns]'])
+def test_date_date2num_numpy(t0, dtype):
+    time = mdates.date2num(t0)
+    tnp = np.array(t0, dtype=dtype)
+    nptime = mdates.date2num(tnp)
+    assert np.array_equal(time, nptime)
+
+
+@pytest.mark.parametrize('dtype', ['datetime64[s]',
+                                    'datetime64[us]',
+                                    'datetime64[ms]',
+                                    'datetime64[ns]'])
+def test_date2num_NaT(dtype):
+    t0 = datetime.datetime(2017, 1, 1, 0, 1, 1)
+    tmpl = [mdates.date2num(t0), np.nan]
+    tnp = np.array([t0, 'NaT'], dtype=dtype)
+    nptime = mdates.date2num(tnp)
+    np.testing.assert_array_equal(tmpl, nptime)
+
+
+@pytest.mark.parametrize('units', ['s', 'ms', 'us', 'ns'])
+def test_date2num_NaT_scalar(units):
+    tmpl = mdates.date2num(np.datetime64('NaT', units))
+    assert np.isnan(tmpl)
 
 
 @image_comparison(baseline_images=['date_empty'], extensions=['png'])
@@ -96,7 +151,10 @@ def test_too_many_date_ticks():
     tf = datetime.datetime(2000, 1, 20)
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    ax.set_xlim((t0, tf), auto=True)
+    with pytest.warns(UserWarning) as rec:
+        ax.set_xlim((t0, tf), auto=True)
+        assert len(rec) == 1
+        assert 'Attempting to set identical left==right' in str(rec[0].message)
     ax.plot([], [])
     ax.xaxis.set_major_locator(mdates.DayLocator())
     with pytest.raises(RuntimeError):
@@ -130,8 +188,8 @@ def test_RRuleLocator():
 
 def test_RRuleLocator_dayrange():
     loc = mdates.DayLocator()
-    x1 = datetime.datetime(year=1, month=1, day=1, tzinfo=pytz.UTC)
-    y1 = datetime.datetime(year=1, month=1, day=16, tzinfo=pytz.UTC)
+    x1 = datetime.datetime(year=1, month=1, day=1, tzinfo=mdates.UTC)
+    y1 = datetime.datetime(year=1, month=1, day=16, tzinfo=mdates.UTC)
     loc.tick_values(x1, y1)
     # On success, no overflow error shall be thrown
 
@@ -190,7 +248,8 @@ def test_date_formatter_strftime():
                 minute=dt.minute,
                 second=dt.second,
                 microsecond=dt.microsecond))
-        assert formatter.strftime(dt) == formatted_date_str
+        with pytest.warns(MatplotlibDeprecationWarning):
+            assert formatter.strftime(dt) == formatted_date_str
 
         try:
             # Test strftime("%x") with the current locale.
@@ -198,8 +257,9 @@ def test_date_formatter_strftime():
             locale_formatter = mdates.DateFormatter("%x")
             locale_d_fmt = locale.nl_langinfo(locale.D_FMT)
             expanded_formatter = mdates.DateFormatter(locale_d_fmt)
-            assert locale_formatter.strftime(dt) == \
-                expanded_formatter.strftime(dt)
+            with pytest.warns(MatplotlibDeprecationWarning):
+                assert locale_formatter.strftime(dt) == \
+                    expanded_formatter.strftime(dt)
         except (ImportError, AttributeError):
             pass
 
@@ -211,7 +271,7 @@ def test_date_formatter_strftime():
 
 def test_date_formatter_callable():
     scale = -11
-    locator = mock.Mock(_get_unit=mock.Mock(return_value=scale))
+    locator = Mock(_get_unit=Mock(return_value=scale))
     callable_formatting_function = (lambda dates, _:
                                     [dt.strftime('%d-%m//%Y') for dt in dates])
 
@@ -270,7 +330,7 @@ def test_empty_date_with_year_formatter():
 
 def test_auto_date_locator():
     def _create_auto_date_locator(date1, date2):
-        locator = mdates.AutoDateLocator()
+        locator = mdates.AutoDateLocator(interval_multiples=False)
         locator.create_dummy_axis()
         locator.set_view_interval(mdates.date2num(date1),
                                   mdates.date2num(date2))
@@ -315,7 +375,6 @@ def test_auto_date_locator():
                 ['1990-01-01 00:00:00+00:00', '1990-01-01 00:05:00+00:00',
                  '1990-01-01 00:10:00+00:00', '1990-01-01 00:15:00+00:00',
                  '1990-01-01 00:20:00+00:00']
-
                 ],
                [datetime.timedelta(seconds=40),
                 ['1990-01-01 00:00:00+00:00', '1990-01-01 00:00:05+00:00',
@@ -325,11 +384,86 @@ def test_auto_date_locator():
                  '1990-01-01 00:00:40+00:00']
                 ],
                [datetime.timedelta(microseconds=1500),
-                ['1989-12-31 23:59:59.999507+00:00',
+                ['1989-12-31 23:59:59.999500+00:00',
                  '1990-01-01 00:00:00+00:00',
-                 '1990-01-01 00:00:00.000502+00:00',
-                 '1990-01-01 00:00:00.001005+00:00',
-                 '1990-01-01 00:00:00.001508+00:00']
+                 '1990-01-01 00:00:00.000500+00:00',
+                 '1990-01-01 00:00:00.001000+00:00',
+                 '1990-01-01 00:00:00.001500+00:00']
+                ],
+               )
+
+    for t_delta, expected in results:
+        d2 = d1 + t_delta
+        locator = _create_auto_date_locator(d1, d2)
+        assert list(map(str, mdates.num2date(locator()))) == expected
+
+
+def test_auto_date_locator_intmult():
+    def _create_auto_date_locator(date1, date2):
+        locator = mdates.AutoDateLocator(interval_multiples=True)
+        locator.create_dummy_axis()
+        locator.set_view_interval(mdates.date2num(date1),
+                                  mdates.date2num(date2))
+        return locator
+
+    d1 = datetime.datetime(1997, 1, 1)
+    results = ([datetime.timedelta(weeks=52 * 200),
+                ['1980-01-01 00:00:00+00:00', '2000-01-01 00:00:00+00:00',
+                 '2020-01-01 00:00:00+00:00', '2040-01-01 00:00:00+00:00',
+                 '2060-01-01 00:00:00+00:00', '2080-01-01 00:00:00+00:00',
+                 '2100-01-01 00:00:00+00:00', '2120-01-01 00:00:00+00:00',
+                 '2140-01-01 00:00:00+00:00', '2160-01-01 00:00:00+00:00',
+                 '2180-01-01 00:00:00+00:00', '2200-01-01 00:00:00+00:00']
+                ],
+               [datetime.timedelta(weeks=52),
+                ['1997-01-01 00:00:00+00:00', '1997-02-01 00:00:00+00:00',
+                 '1997-03-01 00:00:00+00:00', '1997-04-01 00:00:00+00:00',
+                 '1997-05-01 00:00:00+00:00', '1997-06-01 00:00:00+00:00',
+                 '1997-07-01 00:00:00+00:00', '1997-08-01 00:00:00+00:00',
+                 '1997-09-01 00:00:00+00:00', '1997-10-01 00:00:00+00:00',
+                 '1997-11-01 00:00:00+00:00', '1997-12-01 00:00:00+00:00']
+                ],
+               [datetime.timedelta(days=141),
+                ['1997-01-01 00:00:00+00:00', '1997-01-22 00:00:00+00:00',
+                 '1997-02-01 00:00:00+00:00', '1997-02-22 00:00:00+00:00',
+                 '1997-03-01 00:00:00+00:00', '1997-03-22 00:00:00+00:00',
+                 '1997-04-01 00:00:00+00:00', '1997-04-22 00:00:00+00:00',
+                 '1997-05-01 00:00:00+00:00', '1997-05-22 00:00:00+00:00']
+                ],
+               [datetime.timedelta(days=40),
+                ['1997-01-01 00:00:00+00:00', '1997-01-05 00:00:00+00:00',
+                 '1997-01-09 00:00:00+00:00', '1997-01-13 00:00:00+00:00',
+                 '1997-01-17 00:00:00+00:00', '1997-01-21 00:00:00+00:00',
+                 '1997-01-25 00:00:00+00:00', '1997-01-29 00:00:00+00:00',
+                 '1997-02-01 00:00:00+00:00', '1997-02-05 00:00:00+00:00',
+                 '1997-02-09 00:00:00+00:00']
+                ],
+               [datetime.timedelta(hours=40),
+                ['1997-01-01 00:00:00+00:00', '1997-01-01 04:00:00+00:00',
+                 '1997-01-01 08:00:00+00:00', '1997-01-01 12:00:00+00:00',
+                 '1997-01-01 16:00:00+00:00', '1997-01-01 20:00:00+00:00',
+                 '1997-01-02 00:00:00+00:00', '1997-01-02 04:00:00+00:00',
+                 '1997-01-02 08:00:00+00:00', '1997-01-02 12:00:00+00:00',
+                 '1997-01-02 16:00:00+00:00']
+                ],
+               [datetime.timedelta(minutes=20),
+                ['1997-01-01 00:00:00+00:00', '1997-01-01 00:05:00+00:00',
+                 '1997-01-01 00:10:00+00:00', '1997-01-01 00:15:00+00:00',
+                 '1997-01-01 00:20:00+00:00']
+                ],
+               [datetime.timedelta(seconds=40),
+                ['1997-01-01 00:00:00+00:00', '1997-01-01 00:00:05+00:00',
+                 '1997-01-01 00:00:10+00:00', '1997-01-01 00:00:15+00:00',
+                 '1997-01-01 00:00:20+00:00', '1997-01-01 00:00:25+00:00',
+                 '1997-01-01 00:00:30+00:00', '1997-01-01 00:00:35+00:00',
+                 '1997-01-01 00:00:40+00:00']
+                ],
+               [datetime.timedelta(microseconds=1500),
+                ['1996-12-31 23:59:59.999500+00:00',
+                 '1997-01-01 00:00:00+00:00',
+                 '1997-01-01 00:00:00.000500+00:00',
+                 '1997-01-01 00:00:00.001000+00:00',
+                 '1997-01-01 00:00:00.001500+00:00']
                 ],
                )
 
@@ -356,8 +490,8 @@ def test_date_inverted_limit():
 
 def _test_date2num_dst(date_range, tz_convert):
     # Timezones
-    BRUSSELS = pytz.timezone('Europe/Brussels')
-    UTC = pytz.UTC
+    BRUSSELS = dateutil.tz.gettz('Europe/Brussels')
+    UTC = mdates.UTC
 
     # Create a list of timezone-aware datetime objects in UTC
     # Interval is 0b0.0000011 days, to prevent float rounding issues
@@ -387,7 +521,7 @@ def test_date2num_dst():
         subtraction.
         """
         def __sub__(self, other):
-            r = super(dt_tzaware, self).__sub__(other)
+            r = super().__sub__(other)
             tzinfo = getattr(r, 'tzinfo', None)
 
             if tzinfo is not None:
@@ -401,10 +535,10 @@ def test_date2num_dst():
             return r
 
         def __add__(self, other):
-            return self.mk_tzaware(super(dt_tzaware, self).__add__(other))
+            return self.mk_tzaware(super().__add__(other))
 
         def astimezone(self, tzinfo):
-            dt = super(dt_tzaware, self).astimezone(tzinfo)
+            dt = super().astimezone(tzinfo)
             return self.mk_tzaware(dt)
 
         @classmethod
@@ -439,15 +573,48 @@ def test_date2num_dst():
     _test_date2num_dst(date_range, tz_convert)
 
 
-def test_date2num_dst_pandas():
+def test_date2num_dst_pandas(pd):
     # Test for github issue #3896, but in date2num around DST transitions
     # with a timezone-aware pandas date_range object.
-    pd = pytest.importorskip('pandas')
 
     def tz_convert(*args):
         return pd.DatetimeIndex.tz_convert(*args).astype(object)
 
     _test_date2num_dst(pd.date_range, tz_convert)
+
+
+def _test_rrulewrapper(attach_tz, get_tz):
+    SYD = get_tz('Australia/Sydney')
+
+    dtstart = attach_tz(datetime.datetime(2017, 4, 1, 0), SYD)
+    dtend = attach_tz(datetime.datetime(2017, 4, 4, 0), SYD)
+
+    rule = mdates.rrulewrapper(freq=dateutil.rrule.DAILY, dtstart=dtstart)
+
+    act = rule.between(dtstart, dtend)
+    exp = [datetime.datetime(2017, 4, 1, 13, tzinfo=dateutil.tz.tzutc()),
+           datetime.datetime(2017, 4, 2, 14, tzinfo=dateutil.tz.tzutc())]
+
+    assert act == exp
+
+
+def test_rrulewrapper():
+    def attach_tz(dt, zi):
+        return dt.replace(tzinfo=zi)
+
+    _test_rrulewrapper(attach_tz, dateutil.tz.gettz)
+
+
+@pytest.mark.pytz
+@pytest.mark.skipif(not __has_pytz(), reason="Requires pytz")
+def test_rrulewrapper_pytz():
+    # Test to make sure pytz zones are supported in rrules
+    import pytz
+
+    def attach_tz(dt, zi):
+        return zi.localize(dt)
+
+    _test_rrulewrapper(attach_tz, pytz.timezone)
 
 
 def test_DayLocator():

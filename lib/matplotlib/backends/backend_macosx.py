@@ -1,8 +1,3 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-
 import os
 
 from matplotlib._pylab_helpers import Gcf
@@ -18,7 +13,7 @@ from matplotlib.widgets import SubplotTool
 import matplotlib
 from matplotlib.backends import _macosx
 
-from .backend_agg import RendererAgg, FigureCanvasAgg
+from .backend_agg import FigureCanvasAgg
 
 
 ########################################################################
@@ -78,40 +73,22 @@ class FigureCanvasMac(_macosx.FigureCanvas, FigureCanvasAgg):
             self.figure.dpi = self.figure.dpi / self._device_scale * value
             self._device_scale = value
 
-    def get_renderer(self, cleared=False):
-        l, b, w, h = self.figure.bbox.bounds
-        key = w, h, self.figure.dpi
-        try:
-            self._lastKey, self._renderer
-        except AttributeError:
-            need_new_renderer = True
-        else:
-            need_new_renderer = (self._lastKey != key)
-
-        if need_new_renderer:
-            self._renderer = RendererAgg(w, h, self.figure.dpi)
-            self._lastKey = key
-        elif cleared:
-            self._renderer.clear()
-
-        return self._renderer
-
     def _draw(self):
-        renderer = self.get_renderer()
+        renderer = self.get_renderer(cleared=self.figure.stale)
 
-        if not self.figure.stale:
-            return renderer
+        if self.figure.stale:
+            self.figure.draw(renderer)
 
-        self.figure.draw(renderer)
         return renderer
 
     def draw(self):
         self.invalidate()
+        self.flush_events()
 
     def draw_idle(self, *args, **kwargs):
         self.invalidate()
 
-    def blit(self, bbox):
+    def blit(self, bbox=None):
         self.invalidate()
 
     def resize(self, width, height):
@@ -126,7 +103,7 @@ class FigureCanvasMac(_macosx.FigureCanvas, FigureCanvasAgg):
 
     def new_timer(self, *args, **kwargs):
         """
-        Creates a new backend-specific subclass of :class:`backend_bases.Timer`.
+        Creates a new backend-specific subclass of `backend_bases.Timer`.
         This is useful for getting periodic events through the backend's native
         event loop. Implemented only for backends with GUIs.
 
@@ -149,17 +126,12 @@ class FigureManagerMac(_macosx.FigureManager, FigureManagerBase):
         FigureManagerBase.__init__(self, canvas, num)
         title = "Figure %d" % num
         _macosx.FigureManager.__init__(self, canvas, title)
-        if rcParams['toolbar']=='toolbar2':
+        if rcParams['toolbar'] == 'toolbar2':
             self.toolbar = NavigationToolbar2Mac(canvas)
         else:
             self.toolbar = None
         if self.toolbar is not None:
             self.toolbar.update()
-
-        def notify_axes_change(fig):
-            'this will be called whenever the current axes is changed'
-            if self.toolbar != None: self.toolbar.update()
-        self.canvas.figure.add_axobserver(notify_axes_change)
 
         if matplotlib.is_interactive():
             self.show()
@@ -190,12 +162,12 @@ class NavigationToolbar2Mac(_macosx.NavigationToolbar2, NavigationToolbar2):
     def save_figure(self, *args):
         filename = _macosx.choose_save_file('Save the figure',
                                             self.canvas.get_default_filename())
-        if filename is None: # Cancel
+        if filename is None:  # Cancel
             return
         self.canvas.figure.savefig(filename)
 
     def prepare_configure_subplots(self):
-        toolfig = Figure(figsize=(6,3))
+        toolfig = Figure(figsize=(6, 3))
         canvas = FigureCanvasMac(toolfig)
         toolfig.subplots_adjust(top=0.9)
         tool = SubplotTool(self.canvas.figure, toolfig)
@@ -213,9 +185,11 @@ class NavigationToolbar2Mac(_macosx.NavigationToolbar2, NavigationToolbar2):
 
 @_Backend.export
 class _BackendMac(_Backend):
+    required_interactive_framework = "macosx"
     FigureCanvas = FigureCanvasMac
     FigureManager = FigureManagerMac
 
+    @staticmethod
     def trigger_manager_draw(manager):
         # For performance reasons, we don't want to redraw the figure after
         # each draw command. Instead, we mark the figure as invalid, so that it

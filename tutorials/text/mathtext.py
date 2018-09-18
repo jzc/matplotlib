@@ -12,7 +12,7 @@ ships its own TeX expression parser, layout engine and fonts.  The
 layout engine is a fairly direct adaptation of the layout algorithms
 in Donald Knuth's TeX, so the quality is quite good (matplotlib also
 provides a ``usetex`` option for those who do want to call out to TeX
-to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
+to generate their text (see :doc:`/tutorials/text/usetex`).
 """
 
 ###############################################################################
@@ -23,7 +23,7 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 # (from (La)TeX), `STIX <http://www.stixfonts.org/>`_ fonts (with are designed
 # to blend well with Times), or a Unicode font that you provide.  The mathtext
 # font can be selected with the customization variable ``mathtext.fontset`` (see
-# :ref:`sphx_glr_tutorials_introductory_customizing.py`)
+# :doc:`/tutorials/introductory/customizing`)
 #
 # .. note::
 #    On `"narrow" <http://wordaligned.org/articles/narrow-python>`_ builds
@@ -44,7 +44,7 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 #     # math text
 #     plt.title(r'$\alpha > \beta$')
 #
-# produces ":math:`\alpha > \beta`".
+# produces ":mathmpl:`\alpha > \beta`".
 #
 # .. note::
 #    Mathtext should be placed between a pair of dollar signs ($).  To
@@ -63,8 +63,8 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 #
 #    have special meaning outside of math mode in TeX.  Therefore, these
 #    characters will behave differently depending on the rcParam
-#    ``text.usetex`` flag.  See the :ref:`usetex tutorial
-#    <sphx_glr_tutorials_text_usetex.py>` for more information.
+#    ``text.usetex`` flag.  See the :doc:`usetex tutorial
+#    </tutorials/text/usetex>` for more information.
 #
 # Subscripts and superscripts
 # ---------------------------
@@ -77,9 +77,9 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 #
 #     \alpha_i > \beta_i
 #
-# Some symbols automatically put their sub/superscripts under and over
-# the operator.  For example, to write the sum of :math:`x_i` from :math:`0` to
-# :math:`\infty`, you could do::
+# Some symbols automatically put their sub/superscripts under and over the
+# operator.  For example, to write the sum of :mathmpl:`x_i` from :mathmpl:`0`
+# to :mathmpl:`\infty`, you could do::
 #
 #     r'$\sum_{i=0}^\infty x_i$'
 #
@@ -186,7 +186,7 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 #
 # Here "s" and "t" are variable in italics font (default), "sin" is in
 # Roman font, and the amplitude "A" is in calligraphy font.  Note in the
-# example above the caligraphy ``A`` is squished into the ``sin``.  You
+# example above the calligraphy ``A`` is squished into the ``sin``.  You
 # can use a spacing command to add a little whitespace between them::
 #
 #     s(t) = \mathcal{A}\/\sin(2 \omega t)
@@ -200,13 +200,13 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 #     ============================ ==================================
 #     Command                      Result
 #     ============================ ==================================
-#     ``\mathrm{Roman}``           :math:`\mathrm{Roman}`
-#     ``\mathit{Italic}``          :math:`\mathit{Italic}`
-#     ``\mathtt{Typewriter}``      :math:`\mathtt{Typewriter}`
-#     ``\mathcal{CALLIGRAPHY}``    :math:`\mathcal{CALLIGRAPHY}`
+#     ``\mathrm{Roman}``           :mathmpl:`\mathrm{Roman}`
+#     ``\mathit{Italic}``          :mathmpl:`\mathit{Italic}`
+#     ``\mathtt{Typewriter}``      :mathmpl:`\mathtt{Typewriter}`
+#     ``\mathcal{CALLIGRAPHY}``    :mathmpl:`\mathcal{CALLIGRAPHY}`
 #     ============================ ==================================
 #
-# .. role:: math-stix(math)
+# .. role:: math-stix(mathmpl)
 #    :fontset: stix
 #
 # When using the `STIX <http://www.stixfonts.org/>`_ fonts, you also have the choice of:
@@ -221,7 +221,7 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 #     ``\mathrm{\mathsf{sansserif}}``        :math-stix:`\mathrm{\mathsf{sansserif}}`
 #     ====================================== =========================================
 #
-#   .. htmlonly::
+#   .. only:: html
 #
 #     ====================================== =========================================
 #     ``\mathcircled{circled}``              :math-stix:`\mathcircled{circled}`
@@ -294,16 +294,16 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 #     ============================== =================================
 #     Command                        Result
 #     ============================== =================================
-#     ``\acute a`` or ``\'a``        :math:`\acute a`
-#     ``\bar a``                     :math:`\bar a`
-#     ``\breve a``                   :math:`\breve a`
-#     ``\ddot a`` or ``\''a``        :math:`\ddot a`
-#     ``\dot a`` or ``\.a``          :math:`\dot a`
-#     ``\grave a`` or ``\`a``        :math:`\grave a`
-#     ``\hat a`` or ``\^a``          :math:`\hat a`
-#     ``\tilde a`` or ``\~a``        :math:`\tilde a`
-#     ``\vec a``                     :math:`\vec a`
-#     ``\overline{abc}``             :math:`\overline{abc}`
+#     ``\acute a`` or ``\'a``        :mathmpl:`\acute a`
+#     ``\bar a``                     :mathmpl:`\bar a`
+#     ``\breve a``                   :mathmpl:`\breve a`
+#     ``\ddot a`` or ``\''a``        :mathmpl:`\ddot a`
+#     ``\dot a`` or ``\.a``          :mathmpl:`\dot a`
+#     ``\grave a`` or ``\`a``        :mathmpl:`\grave a`
+#     ``\hat a`` or ``\^a``          :mathmpl:`\hat a`
+#     ``\tilde a`` or ``\~a``        :mathmpl:`\tilde a`
+#     ``\vec a``                     :mathmpl:`\vec a`
+#     ``\overline{abc}``             :mathmpl:`\overline{abc}`
 #     ============================== =================================
 #
 # In addition, there are two special accents that automatically adjust
@@ -312,8 +312,8 @@ to generate their text (see :ref:`sphx_glr_tutorials_text_usetex.py`).
 #     ============================== =================================
 #     Command                        Result
 #     ============================== =================================
-#     ``\widehat{xyz}``              :math:`\widehat{xyz}`
-#     ``\widetilde{xyz}``            :math:`\widetilde{xyz}`
+#     ``\widehat{xyz}``              :mathmpl:`\widehat{xyz}`
+#     ``\widetilde{xyz}``            :mathmpl:`\widetilde{xyz}`
 #     ============================== =================================
 #
 # Care should be taken when putting accents on lower-case i's and j's.

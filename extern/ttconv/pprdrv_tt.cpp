@@ -137,7 +137,7 @@ BYTE *GetTable(struct TTFONT *font, const char *name)
 
             offset = getULONG( ptr + 8 );
             length = getULONG( ptr + 12 );
-            table = (BYTE*)calloc( sizeof(BYTE), length );
+            table = (BYTE*)calloc( sizeof(BYTE), length + 2 );
 
             try
             {
@@ -160,6 +160,9 @@ BYTE *GetTable(struct TTFONT *font, const char *name)
                 free(table);
                 throw;
             }
+            /* Always NUL-terminate; add two in case of UTF16 strings. */
+            table[length] = '\0';
+            table[length + 1] = '\0';
             return table;
         }
 
@@ -242,7 +245,7 @@ void Read_name(struct TTFONT *font)
             {
                 font->Copyright = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->Copyright,(const char*)strings+offset,length);
-                font->Copyright[length]=(char)NULL;
+                font->Copyright[length]='\0';
                 replace_newlines_with_spaces(font->Copyright);
 
 #ifdef DEBUG_TRUETYPE
@@ -258,7 +261,7 @@ void Read_name(struct TTFONT *font)
                 free(font->FamilyName);
                 font->FamilyName = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->FamilyName,(const char*)strings+offset,length);
-                font->FamilyName[length]=(char)NULL;
+                font->FamilyName[length]='\0';
                 replace_newlines_with_spaces(font->FamilyName);
 
 #ifdef DEBUG_TRUETYPE
@@ -274,7 +277,7 @@ void Read_name(struct TTFONT *font)
                 free(font->Style);
                 font->Style = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->Style,(const char*)strings+offset,length);
-                font->Style[length]=(char)NULL;
+                font->Style[length]='\0';
                 replace_newlines_with_spaces(font->Style);
 
 #ifdef DEBUG_TRUETYPE
@@ -290,7 +293,7 @@ void Read_name(struct TTFONT *font)
                 free(font->FullName);
                 font->FullName = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->FullName,(const char*)strings+offset,length);
-                font->FullName[length]=(char)NULL;
+                font->FullName[length]='\0';
                 replace_newlines_with_spaces(font->FullName);
 
 #ifdef DEBUG_TRUETYPE
@@ -306,7 +309,7 @@ void Read_name(struct TTFONT *font)
                 free(font->Version);
                 font->Version = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->Version,(const char*)strings+offset,length);
-                font->Version[length]=(char)NULL;
+                font->Version[length]='\0';
                 replace_newlines_with_spaces(font->Version);
 
 #ifdef DEBUG_TRUETYPE
@@ -322,7 +325,7 @@ void Read_name(struct TTFONT *font)
                 free(font->PostName);
                 font->PostName = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->PostName,(const char*)strings+offset,length);
-                font->PostName[length]=(char)NULL;
+                font->PostName[length]='\0';
                 replace_newlines_with_spaces(font->PostName);
 
 #ifdef DEBUG_TRUETYPE
@@ -337,7 +340,7 @@ void Read_name(struct TTFONT *font)
                 free(font->PostName);
                 font->PostName = (char*)calloc(sizeof(char),length+1);
                 utf16be_to_ascii(font->PostName, (char *)strings+offset, length);
-                font->PostName[length/2]=(char)NULL;
+                font->PostName[length/2]='\0';
                 replace_newlines_with_spaces(font->PostName);
 
 #ifdef DEBUG_TRUETYPE
@@ -352,7 +355,7 @@ void Read_name(struct TTFONT *font)
             {
                 font->Trademark = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->Trademark,(const char*)strings+offset,length);
-                font->Trademark[length]=(char)NULL;
+                font->Trademark[length]='\0';
                 replace_newlines_with_spaces(font->Trademark);
 
 #ifdef DEBUG_TRUETYPE
@@ -1038,7 +1041,7 @@ const char *ttfont_CharStrings_getname(struct TTFONT *font, int charindex)
         }
 
         strncpy(temp,ptr,len);  /* Copy the pascal string into */
-        temp[len]=(char)NULL;   /* a buffer and make it ASCIIz. */
+        temp[len]='\0';   /* a buffer and make it ASCIIz. */
 
         return temp;
     }

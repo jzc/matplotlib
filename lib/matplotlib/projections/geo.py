@@ -1,29 +1,18 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-
-import math
-
 import numpy as np
-import numpy.ma as ma
 
-import matplotlib
-rcParams = matplotlib.rcParams
+from matplotlib import rcParams
 from matplotlib.axes import Axes
-from matplotlib import cbook
+import matplotlib.axis as maxis
 from matplotlib.patches import Circle
 from matplotlib.path import Path
 import matplotlib.spines as mspines
-import matplotlib.axis as maxis
-from matplotlib.ticker import Formatter, Locator, NullLocator, FixedLocator, NullFormatter
-from matplotlib.transforms import Affine2D, Affine2DBase, Bbox, \
-    BboxTransformTo, IdentityTransform, Transform, TransformWrapper
+from matplotlib.ticker import (
+    Formatter, NullLocator, FixedLocator, NullFormatter)
+from matplotlib.transforms import Affine2D, BboxTransformTo, Transform
+
 
 class GeoAxes(Axes):
-    """
-    An abstract base class for geographic projections
-    """
+    """An abstract base class for geographic projections."""
     class ThetaFormatter(Formatter):
         """
         Used to format the theta tick labels.  Converts the native
@@ -87,23 +76,23 @@ class GeoAxes(Axes):
         # This is the transform for longitude ticks.
         self._xaxis_pretransform = \
             Affine2D() \
-            .scale(1.0, self._longitude_cap * 2.0) \
-            .translate(0.0, -self._longitude_cap)
+            .scale(1, self._longitude_cap * 2) \
+            .translate(0, -self._longitude_cap)
         self._xaxis_transform = \
             self._xaxis_pretransform + \
             self.transData
         self._xaxis_text1_transform = \
-            Affine2D().scale(1.0, 0.0) + \
+            Affine2D().scale(1, 0) + \
             self.transData + \
-            Affine2D().translate(0.0, 4.0)
+            Affine2D().translate(0, 4)
         self._xaxis_text2_transform = \
-            Affine2D().scale(1.0, 0.0) + \
+            Affine2D().scale(1, 0) + \
             self.transData + \
-            Affine2D().translate(0.0, -4.0)
+            Affine2D().translate(0, -4)
 
         # This is the transform for latitude ticks.
-        yaxis_stretch = Affine2D().scale(np.pi * 2.0, 1.0).translate(-np.pi, 0.0)
-        yaxis_space = Affine2D().scale(1.0, 1.1)
+        yaxis_stretch = Affine2D().scale(np.pi * 2, 1).translate(-np.pi, 0)
+        yaxis_space = Affine2D().scale(1, 1.1)
         self._yaxis_transform = \
             yaxis_stretch + \
             self.transData
@@ -115,23 +104,23 @@ class GeoAxes(Axes):
              self.transAxes)
         self._yaxis_text1_transform = \
             yaxis_text_base + \
-            Affine2D().translate(-8.0, 0.0)
+            Affine2D().translate(-8, 0)
         self._yaxis_text2_transform = \
             yaxis_text_base + \
-            Affine2D().translate(8.0, 0.0)
+            Affine2D().translate(8, 0)
 
     def _get_affine_transform(self):
         transform = self._get_core_transform(1)
         xscale, _ = transform.transform_point((np.pi, 0))
-        _, yscale = transform.transform_point((0, np.pi / 2.0))
+        _, yscale = transform.transform_point((0, np.pi / 2))
         return Affine2D() \
             .scale(0.5 / xscale, 0.5 / yscale) \
             .translate(0.5, 0.5)
 
-    def get_xaxis_transform(self,which='grid'):
-        if which not in ['tick1','tick2','grid']:
-            msg = "'which' must be on of [ 'tick1' | 'tick2' | 'grid' ]"
-            raise ValueError(msg)
+    def get_xaxis_transform(self, which='grid'):
+        if which not in ['tick1', 'tick2', 'grid']:
+            raise ValueError(
+                "'which' must be one of 'tick1', 'tick2', or 'grid'")
         return self._xaxis_transform
 
     def get_xaxis_text1_transform(self, pad):
@@ -140,10 +129,10 @@ class GeoAxes(Axes):
     def get_xaxis_text2_transform(self, pad):
         return self._xaxis_text2_transform, 'top', 'center'
 
-    def get_yaxis_transform(self,which='grid'):
-        if which not in ['tick1','tick2','grid']:
-            msg = "'which' must be one of [ 'tick1' | 'tick2' | 'grid' ]"
-            raise ValueError(msg)
+    def get_yaxis_transform(self, which='grid'):
+        if which not in ['tick1', 'tick2', 'grid']:
+            raise ValueError(
+                "'which' must be one of 'tick1', 'tick2', or 'grid'")
         return self._yaxis_transform
 
     def get_yaxis_text1_transform(self, pad):
@@ -156,8 +145,7 @@ class GeoAxes(Axes):
         return Circle((0.5, 0.5), 0.5)
 
     def _gen_axes_spines(self):
-        return {'geo':mspines.Spine.circular_spine(self,
-                                                   (0.5, 0.5), 0.5)}
+        return {'geo': mspines.Spine.circular_spine(self, (0.5, 0.5), 0.5)}
 
     def set_yscale(self, *args, **kwargs):
         if args[0] != 'linear':
@@ -208,7 +196,7 @@ class GeoAxes(Axes):
         """
         Set the latitude(s) at which to stop drawing the longitude grids.
         """
-        self._longitude_cap = degrees * (np.pi / 180.0)
+        self._longitude_cap = np.deg2rad(degrees)
         self._xaxis_pretransform \
             .clear() \
             .scale(1.0, self._longitude_cap * 2.0) \
@@ -248,65 +236,63 @@ class GeoAxes(Axes):
         pass
 
 
+class _GeoTransform(Transform):
+    # Factoring out some common functionality.
+    input_dims = 2
+    output_dims = 2
+    is_separable = False
+
+    def __init__(self, resolution):
+        """
+        Create a new geographical transform.
+
+        Resolution is the number of steps to interpolate between each input
+        line segment to approximate its path in curved space.
+        """
+        Transform.__init__(self)
+        self._resolution = resolution
+
+    def __str__(self):
+        return "{}({})".format(type(self).__name__, self._resolution)
+
+    def transform_path_non_affine(self, path):
+        ipath = path.interpolated(self._resolution)
+        return Path(self.transform(ipath.vertices), ipath.codes)
+    transform_path_non_affine.__doc__ = \
+        Transform.transform_path_non_affine.__doc__
+
+
 class AitoffAxes(GeoAxes):
     name = 'aitoff'
 
-    class AitoffTransform(Transform):
-        """
-        The base Aitoff transform.
-        """
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
-
-        def __init__(self, resolution):
-            """
-            Create a new Aitoff transform.  Resolution is the number of steps
-            to interpolate between each input line segment to approximate its
-            path in curved Aitoff space.
-            """
-            Transform.__init__(self)
-            self._resolution = resolution
+    class AitoffTransform(_GeoTransform):
+        """The base Aitoff transform."""
 
         def transform_non_affine(self, ll):
-            longitude = ll[:, 0:1]
-            latitude  = ll[:, 1:2]
+            longitude = ll[:, 0]
+            latitude = ll[:, 1]
 
             # Pre-compute some values
             half_long = longitude / 2.0
             cos_latitude = np.cos(latitude)
 
             alpha = np.arccos(cos_latitude * np.cos(half_long))
-            # Mask this array or we'll get divide-by-zero errors
-            alpha = ma.masked_where(alpha == 0.0, alpha)
-            # The numerators also need to be masked so that masked
-            # division will be invoked.
+            # Avoid divide-by-zero errors using same method as NumPy.
+            alpha[alpha == 0.0] = 1e-20
             # We want unnormalized sinc.  numpy.sinc gives us normalized
-            sinc_alpha = ma.sin(alpha) / alpha
+            sinc_alpha = np.sin(alpha) / alpha
 
-            x = (cos_latitude * ma.sin(half_long)) / sinc_alpha
-            y = (ma.sin(latitude) / sinc_alpha)
-            return np.concatenate((x.filled(0), y.filled(0)), 1)
+            xy = np.empty_like(ll, float)
+            xy[:, 0] = (cos_latitude * np.sin(half_long)) / sinc_alpha
+            xy[:, 1] = np.sin(latitude) / sinc_alpha
+            return xy
         transform_non_affine.__doc__ = Transform.transform_non_affine.__doc__
-
-        def transform_path_non_affine(self, path):
-            vertices = path.vertices
-            ipath = path.interpolated(self._resolution)
-            return Path(self.transform(ipath.vertices), ipath.codes)
-        transform_path_non_affine.__doc__ = Transform.transform_path_non_affine.__doc__
 
         def inverted(self):
             return AitoffAxes.InvertedAitoffTransform(self._resolution)
         inverted.__doc__ = Transform.inverted.__doc__
 
-    class InvertedAitoffTransform(Transform):
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
-
-        def __init__(self, resolution):
-            Transform.__init__(self)
-            self._resolution = resolution
+    class InvertedAitoffTransform(_GeoTransform):
 
         def transform_non_affine(self, xy):
             # MGDTODO: Math is hard ;(
@@ -330,22 +316,8 @@ class AitoffAxes(GeoAxes):
 class HammerAxes(GeoAxes):
     name = 'hammer'
 
-    class HammerTransform(Transform):
-        """
-        The base Hammer transform.
-        """
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
-
-        def __init__(self, resolution):
-            """
-            Create a new Hammer transform.  Resolution is the number of steps
-            to interpolate between each input line segment to approximate its
-            path in curved Hammer space.
-            """
-            Transform.__init__(self)
-            self._resolution = resolution
+    class HammerTransform(_GeoTransform):
+        """The base Hammer transform."""
 
         def transform_non_affine(self, ll):
             longitude = ll[:, 0:1]
@@ -362,24 +334,11 @@ class HammerAxes(GeoAxes):
             return np.concatenate((x, y), 1)
         transform_non_affine.__doc__ = Transform.transform_non_affine.__doc__
 
-        def transform_path_non_affine(self, path):
-            vertices = path.vertices
-            ipath = path.interpolated(self._resolution)
-            return Path(self.transform(ipath.vertices), ipath.codes)
-        transform_path_non_affine.__doc__ = Transform.transform_path_non_affine.__doc__
-
         def inverted(self):
             return HammerAxes.InvertedHammerTransform(self._resolution)
         inverted.__doc__ = Transform.inverted.__doc__
 
-    class InvertedHammerTransform(Transform):
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
-
-        def __init__(self, resolution):
-            Transform.__init__(self)
-            self._resolution = resolution
+    class InvertedHammerTransform(_GeoTransform):
 
         def transform_non_affine(self, xy):
             x, y = xy.T
@@ -406,33 +365,20 @@ class HammerAxes(GeoAxes):
 class MollweideAxes(GeoAxes):
     name = 'mollweide'
 
-    class MollweideTransform(Transform):
-        """
-        The base Mollweide transform.
-        """
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
-
-        def __init__(self, resolution):
-            """
-            Create a new Mollweide transform.  Resolution is the number of steps
-            to interpolate between each input line segment to approximate its
-            path in curved Mollweide space.
-            """
-            Transform.__init__(self)
-            self._resolution = resolution
+    class MollweideTransform(_GeoTransform):
+        """The base Mollweide transform."""
 
         def transform_non_affine(self, ll):
             def d(theta):
-                delta = -(theta + np.sin(theta) - pi_sin_l) / (1 + np.cos(theta))
+                delta = (-(theta + np.sin(theta) - pi_sin_l)
+                         / (1 + np.cos(theta)))
                 return delta, np.abs(delta) > 0.001
 
             longitude = ll[:, 0]
             latitude  = ll[:, 1]
 
             clat = np.pi/2 - np.abs(latitude)
-            ihigh = clat < 0.087 # within 5 degrees of the poles
+            ihigh = clat < 0.087  # within 5 degrees of the poles
             ilow = ~ihigh
             aux = np.empty(latitude.shape, dtype=float)
 
@@ -445,36 +391,23 @@ class MollweideAxes(GeoAxes):
                     delta, large_delta = d(theta)
                 aux[ilow] = theta / 2
 
-            if ihigh.any(): # Taylor series-based approx. solution
+            if ihigh.any():  # Taylor series-based approx. solution
                 e = clat[ihigh]
                 d = 0.5 * (3 * np.pi * e**2) ** (1.0/3)
                 aux[ihigh] = (np.pi/2 - d) * np.sign(latitude[ihigh])
 
             xy = np.empty(ll.shape, dtype=float)
-            xy[:,0] = (2.0 * np.sqrt(2.0) / np.pi) * longitude * np.cos(aux)
-            xy[:,1] = np.sqrt(2.0) * np.sin(aux)
+            xy[:, 0] = (2.0 * np.sqrt(2.0) / np.pi) * longitude * np.cos(aux)
+            xy[:, 1] = np.sqrt(2.0) * np.sin(aux)
 
             return xy
         transform_non_affine.__doc__ = Transform.transform_non_affine.__doc__
-
-        def transform_path_non_affine(self, path):
-            vertices = path.vertices
-            ipath = path.interpolated(self._resolution)
-            return Path(self.transform(ipath.vertices), ipath.codes)
-        transform_path_non_affine.__doc__ = Transform.transform_path_non_affine.__doc__
 
         def inverted(self):
             return MollweideAxes.InvertedMollweideTransform(self._resolution)
         inverted.__doc__ = Transform.inverted.__doc__
 
-    class InvertedMollweideTransform(Transform):
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
-
-        def __init__(self, resolution):
-            Transform.__init__(self)
-            self._resolution = resolution
+    class InvertedMollweideTransform(_GeoTransform):
 
         def transform_non_affine(self, xy):
             x = xy[:, 0:1]
@@ -506,13 +439,8 @@ class MollweideAxes(GeoAxes):
 class LambertAxes(GeoAxes):
     name = 'lambert'
 
-    class LambertTransform(Transform):
-        """
-        The base Lambert transform.
-        """
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
+    class LambertTransform(_GeoTransform):
+        """The base Lambert transform."""
 
         def __init__(self, center_longitude, center_latitude, resolution):
             """
@@ -520,8 +448,7 @@ class LambertAxes(GeoAxes):
             to interpolate between each input line segment to approximate its
             path in curved Lambert space.
             """
-            Transform.__init__(self)
-            self._resolution = resolution
+            _GeoTransform.__init__(self, resolution)
             self._center_longitude = center_longitude
             self._center_latitude = center_latitude
 
@@ -548,12 +475,6 @@ class LambertAxes(GeoAxes):
             return np.concatenate((x, y), 1)
         transform_non_affine.__doc__ = Transform.transform_non_affine.__doc__
 
-        def transform_path_non_affine(self, path):
-            vertices = path.vertices
-            ipath = path.interpolated(self._resolution)
-            return Path(self.transform(ipath.vertices), ipath.codes)
-        transform_path_non_affine.__doc__ = Transform.transform_path_non_affine.__doc__
-
         def inverted(self):
             return LambertAxes.InvertedLambertTransform(
                 self._center_longitude,
@@ -561,14 +482,10 @@ class LambertAxes(GeoAxes):
                 self._resolution)
         inverted.__doc__ = Transform.inverted.__doc__
 
-    class InvertedLambertTransform(Transform):
-        input_dims = 2
-        output_dims = 2
-        is_separable = False
+    class InvertedLambertTransform(_GeoTransform):
 
         def __init__(self, center_longitude, center_latitude, resolution):
-            Transform.__init__(self)
-            self._resolution = resolution
+            _GeoTransform.__init__(self, resolution)
             self._center_longitude = center_longitude
             self._center_latitude = center_latitude
 
@@ -598,10 +515,10 @@ class LambertAxes(GeoAxes):
                 self._resolution)
         inverted.__doc__ = Transform.inverted.__doc__
 
-    def __init__(self, *args, **kwargs):
-        self._longitude_cap = np.pi / 2.0
-        self._center_longitude = kwargs.pop("center_longitude", 0.0)
-        self._center_latitude = kwargs.pop("center_latitude", 0.0)
+    def __init__(self, *args, center_longitude=0, center_latitude=0, **kwargs):
+        self._longitude_cap = np.pi / 2
+        self._center_longitude = center_longitude
+        self._center_latitude = center_latitude
         GeoAxes.__init__(self, *args, **kwargs)
         self.set_aspect('equal', adjustable='box', anchor='C')
         self.cla()

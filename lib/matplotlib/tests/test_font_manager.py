@@ -1,26 +1,17 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-
 import os
+import shutil
 import tempfile
 import warnings
 
+import numpy as np
 import pytest
 
 from matplotlib.font_manager import (
     findfont, FontProperties, fontManager, json_dump, json_load, get_font,
-    get_fontconfig_fonts, is_opentype_cff_font, fontManager as fm)
+    get_fontconfig_fonts, is_opentype_cff_font)
 from matplotlib import rc_context
 
-if six.PY2:
-    from distutils.spawn import find_executable
-    has_fclist = find_executable('fc-list') is not None
-else:
-    # py >= 3.3
-    from shutil import which
-    has_fclist = which('fc-list') is not None
+has_fclist = shutil.which('fc-list') is not None
 
 
 def test_font_priority():
@@ -76,13 +67,32 @@ def test_otf():
     if os.path.exists(fname):
         assert is_opentype_cff_font(fname)
 
-    otf_files = [f for f in fm.ttffiles if 'otf' in f]
-    for f in otf_files:
-        with open(f, 'rb') as fd:
-            res = fd.read(4) == b'OTTO'
-        assert res == is_opentype_cff_font(f)
+    for f in fontManager.ttflist:
+        if 'otf' in f.fname:
+            with open(f.fname, 'rb') as fd:
+                res = fd.read(4) == b'OTTO'
+            assert res == is_opentype_cff_font(f.fname)
 
 
 @pytest.mark.skipif(not has_fclist, reason='no fontconfig installed')
 def test_get_fontconfig_fonts():
     assert len(get_fontconfig_fonts()) > 1
+
+
+@pytest.mark.parametrize('factor', [2, 4, 6, 8])
+def test_hinting_factor(factor):
+    font = findfont(FontProperties(family=["sans-serif"]))
+
+    font1 = get_font(font, hinting_factor=1)
+    font1.clear()
+    font1.set_size(12, 100)
+    font1.set_text('abc')
+    expected = font1.get_width_height()
+
+    hinted_font = get_font(font, hinting_factor=factor)
+    hinted_font.clear()
+    hinted_font.set_size(12, 100)
+    hinted_font.set_text('abc')
+    # Check that hinting only changes text layout by a small (10%) amount.
+    np.testing.assert_allclose(hinted_font.get_width_height(), expected,
+                               rtol=0.1)

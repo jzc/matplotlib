@@ -1,16 +1,10 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
 import copy
-import six
 import itertools
-import warnings
-from distutils.version import LooseVersion as V
 
 import numpy as np
 import pytest
 
-from numpy.testing.utils import assert_array_equal, assert_array_almost_equal
+from numpy.testing import assert_array_equal, assert_array_almost_equal
 
 from matplotlib import cycler
 import matplotlib
@@ -68,7 +62,6 @@ def test_colormap_endian():
     for dt in ["f2", "f4", "f8"]:
         anative = np.ma.masked_invalid(np.array(a, dtype=dt))
         aforeign = anative.byteswap().newbyteorder()
-        #print(anative.dtype.isnative, aforeign.dtype.isnative)
         assert_array_equal(cmap(anative), cmap(aforeign))
 
 
@@ -108,7 +101,7 @@ def test_BoundaryNorm():
     expected = [-1, 0, 1, 2]
     for v, ex in zip(vals, expected):
         ret = bn(v)
-        assert isinstance(ret, six.integer_types)
+        assert isinstance(ret, int)
         assert_array_equal(ret, ex)
         assert_array_equal(bn([v]), ex)
 
@@ -117,7 +110,7 @@ def test_BoundaryNorm():
     expected = [-1, 0, 2, 3]
     for v, ex in zip(vals, expected):
         ret = bn(v)
-        assert isinstance(ret, six.integer_types)
+        assert isinstance(ret, int)
         assert_array_equal(ret, ex)
         assert_array_equal(bn([v]), ex)
 
@@ -126,7 +119,7 @@ def test_BoundaryNorm():
     expected = [0, 0, 2, 2]
     for v, ex in zip(vals, expected):
         ret = bn(v)
-        assert isinstance(ret, six.integer_types)
+        assert isinstance(ret, int)
         assert_array_equal(ret, ex)
         assert_array_equal(bn([v]), ex)
 
@@ -193,6 +186,15 @@ def test_PowerNorm():
     assert pnorm(a[-1], clip=True) == expected[-1]
 
 
+def test_PowerNorm_translation_invariance():
+    a = np.array([0, 1/2, 1], dtype=float)
+    expected = [0, 1/8, 1]
+    pnorm = mcolors.PowerNorm(vmin=0, vmax=1, gamma=3)
+    assert_array_almost_equal(pnorm(a), expected)
+    pnorm = mcolors.PowerNorm(vmin=-2, vmax=-1, gamma=3)
+    assert_array_almost_equal(pnorm(a - 2), expected)
+
+
 def test_Normalize():
     norm = mcolors.Normalize()
     vals = np.arange(-10, 10, 1, dtype=float)
@@ -245,6 +247,18 @@ def test_SymLogNorm_colorbar():
     norm = mcolors.SymLogNorm(0.1, vmin=-1, vmax=1, linscale=1)
     fig = plt.figure()
     cbar = mcolorbar.ColorbarBase(fig.add_subplot(111), norm=norm)
+    plt.close(fig)
+
+
+def test_SymLogNorm_single_zero():
+    """
+    Test SymLogNorm to ensure it is not adding sub-ticks to zero label
+    """
+    fig = plt.figure()
+    norm = mcolors.SymLogNorm(1e-5, vmin=-1, vmax=1)
+    cbar = mcolorbar.ColorbarBase(fig.add_subplot(111), norm=norm)
+    ticks = cbar.get_ticks()
+    assert sum(ticks == 0) == 1
     plt.close(fig)
 
 
@@ -448,17 +462,9 @@ def test_light_source_shading_default():
           [1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00]]
         ]).T
 
-    if (V(np.__version__) == V('1.9.0')):
-        # Numpy 1.9.0 uses a 2. order algorithm on the edges by default
-        # This was changed back again in 1.9.1
-        expect = expect[1:-1, 1:-1, :]
-        rgb = rgb[1:-1, 1:-1, :]
-
     assert_array_almost_equal(rgb, expect, decimal=2)
 
 
-@pytest.mark.xfail(V('1.7.0') <= V(np.__version__) <= V('1.9.0'),
-                   reason='NumPy version is not buggy')
 # Numpy 1.9.1 fixed a bug in masked arrays which resulted in
 # additional elements being masked when calculating the gradient thus
 # the output is different with earlier numpy versions.
@@ -528,14 +534,7 @@ def test_light_source_hillshading():
         dy = -dy
         dz = np.ones_like(dy)
         normals = np.dstack([dx, dy, dz])
-        dividers = np.zeros_like(z)[..., None]
-        for i, mat in enumerate(normals):
-            for j, vec in enumerate(mat):
-                dividers[i, j, 0] = np.linalg.norm(vec)
-        normals /= dividers
-        # once we drop support for numpy 1.7.x the above can be written as
-        # normals /= np.linalg.norm(normals, axis=2)[..., None]
-        # aviding the double loop.
+        normals /= np.linalg.norm(normals, axis=2)[..., None]
 
         intensity = np.tensordot(normals, illum, axes=(2, 0))
         intensity -= intensity.min()
@@ -605,8 +604,7 @@ def _azimuth2math(azimuth, elevation):
     return theta, phi
 
 
-def test_pandas_iterable():
-    pd = pytest.importorskip('pandas')
+def test_pandas_iterable(pd):
     # Using a list or series yields equivalent
     # color maps, i.e the series isn't seen as
     # a single color
@@ -617,17 +615,11 @@ def test_pandas_iterable():
     assert_array_equal(cm1.colors, cm2.colors)
 
 
-@pytest.mark.parametrize('name', cm.cmap_d)
+@pytest.mark.parametrize('name', sorted(cm.cmap_d))
 def test_colormap_reversing(name):
     """Check the generated _lut data of a colormap and corresponding
     reversed colormap if they are almost the same."""
-    should_have_warning = {'spectral', 'spectral_r', 'Vega10', 'Vega10_r',
-                           'Vega20', 'Vega20_r', 'Vega20b', 'Vega20b_r',
-                           'Vega20c', 'Vega20c_r'}
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter('always')
-        cmap = plt.get_cmap(name)
-    assert len(w) == (1 if name in should_have_warning else 0)
+    cmap = plt.get_cmap(name)
     cmap_r = cmap.reversed()
     if not cmap_r._isinit:
         cmap._init()
@@ -690,7 +682,7 @@ def test_tableau_order():
     assert list(mcolors.TABLEAU_COLORS.values()) == dflt_cycle
 
 
-def test_ndarray_subclass_norm():
+def test_ndarray_subclass_norm(recwarn):
     # Emulate an ndarray subclass that handles units
     # which objects when adding or subtracting with other
     # arrays. See #6622 and #8696
@@ -702,8 +694,22 @@ def test_ndarray_subclass_norm():
             raise RuntimeError
 
     data = np.arange(-10, 10, 1, dtype=float)
+    data.shape = (10, 2)
+    mydata = data.view(MyArray)
 
     for norm in [mcolors.Normalize(), mcolors.LogNorm(),
                  mcolors.SymLogNorm(3, vmax=5, linscale=1),
+                 mcolors.Normalize(vmin=mydata.min(), vmax=mydata.max()),
+                 mcolors.SymLogNorm(3, vmin=mydata.min(), vmax=mydata.max()),
                  mcolors.PowerNorm(1)]:
-        assert_array_equal(norm(data.view(MyArray)), norm(data))
+        assert_array_equal(norm(mydata), norm(data))
+        fig, ax = plt.subplots()
+        ax.imshow(mydata, norm=norm)
+        fig.canvas.draw()
+        assert len(recwarn) == 0
+        recwarn.clear()
+
+
+def test_same_color():
+    assert mcolors.same_color('k', (0, 0, 0))
+    assert not mcolors.same_color('w', (1, 1, 0))

@@ -3,17 +3,16 @@
 Shading Example
 ===============
 
+Example showing how to make shaded relief plots
+like Mathematica
+(http://reference.wolfram.com/mathematica/ref/ReliefPlot.html)
+or Generic Mapping Tools
+(https://gmt.soest.hawaii.edu/)
 """
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LightSource
 from matplotlib.cbook import get_sample_data
-
-# Example showing how to make shaded relief plots
-# like Mathematica
-# (http://reference.wolfram.com/mathematica/ref/ReliefPlot.html)
-# or Generic Mapping Tools
-# (http://gmt.soest.hawaii.edu/gmt/doc/gmt/html/GMT_Docs/node145.html)
 
 
 def main():
@@ -36,29 +35,43 @@ def main():
 
 def compare(z, cmap, ve=1):
     # Create subplots and hide ticks
-    fig, axes = plt.subplots(ncols=2, nrows=2)
-    for ax in axes.flat:
+    fig, axs = plt.subplots(ncols=2, nrows=2)
+    for ax in axs.flat:
         ax.set(xticks=[], yticks=[])
 
     # Illuminate the scene from the northwest
     ls = LightSource(azdeg=315, altdeg=45)
 
-    axes[0, 0].imshow(z, cmap=cmap)
-    axes[0, 0].set(xlabel='Colormapped Data')
+    axs[0, 0].imshow(z, cmap=cmap)
+    axs[0, 0].set(xlabel='Colormapped Data')
 
-    axes[0, 1].imshow(ls.hillshade(z, vert_exag=ve), cmap='gray')
-    axes[0, 1].set(xlabel='Illumination Intensity')
+    axs[0, 1].imshow(ls.hillshade(z, vert_exag=ve), cmap='gray')
+    axs[0, 1].set(xlabel='Illumination Intensity')
 
     rgb = ls.shade(z, cmap=cmap, vert_exag=ve, blend_mode='hsv')
-    axes[1, 0].imshow(rgb)
-    axes[1, 0].set(xlabel='Blend Mode: "hsv" (default)')
+    axs[1, 0].imshow(rgb)
+    axs[1, 0].set(xlabel='Blend Mode: "hsv" (default)')
 
     rgb = ls.shade(z, cmap=cmap, vert_exag=ve, blend_mode='overlay')
-    axes[1, 1].imshow(rgb)
-    axes[1, 1].set(xlabel='Blend Mode: "overlay"')
+    axs[1, 1].imshow(rgb)
+    axs[1, 1].set(xlabel='Blend Mode: "overlay"')
 
     return fig
 
 
 if __name__ == '__main__':
     main()
+
+#############################################################################
+#
+# ------------
+#
+# References
+# """"""""""
+#
+# The use of the following functions, methods and classes is shown in this example:
+
+import matplotlib
+matplotlib.colors.LightSource
+matplotlib.axes.Axes.imshow
+matplotlib.pyplot.imshow
